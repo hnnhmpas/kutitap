@@ -26,6 +26,10 @@ import {
 } from 'lucide-react';
 import './pixel-theme.css';
 
+// Firebase imports
+import { db } from './firebase';
+import { doc, setDoc, onSnapshot } from 'firebase/firestore';
+
 // Pixel sprites (sliced from the badge sheet)
 import spApple from './assets/pixel/apple.png';
 import spClover from './assets/pixel/clover.png';
@@ -49,34 +53,53 @@ const Sprite = ({ src, className = '' }) => (
   <img src={src} alt="" draggable={false} className={`px-sprite ${className}`} />
 );
 
-// Custom hook to handle Local Storage persistence
-function useLocalStorage(key, initialValue) {
-  const [storedValue, setStoredValue] = useState(() => {
-    if (typeof window === "undefined") return initialValue;
-    try {
-      const item = window.localStorage.getItem(key);
-      return item ? JSON.parse(item) : initialValue;
-    } catch (error) {
-      console.warn("Error reading localStorage", error);
-      return initialValue;
-    }
-  });
+// Firebase-backed state hook (syncs live to Firestore document)
+function useFirebaseSync(key, initialValue) {
+  const [storedValue, setStoredValue] = useState(initialValue);
+  const [isLoaded, setIsLoaded] = useState(false);
 
-  const setValue = (value) => {
+  useEffect(() => {
+    const docRef = doc(db, "financeTracker", "user_data");
+    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+      if (docSnap.exists() && docSnap.data()[key] !== undefined) {
+        setStoredValue(docSnap.data()[key]);
+      } else {
+        try {
+          const item = window.localStorage.getItem(key);
+          if (item) setStoredValue(JSON.parse(item));
+        } catch (e) {}
+      }
+      setIsLoaded(true);
+    }, (error) => {
+      console.warn("Firestore sync fallback to local storage:", error);
+      try {
+        const item = window.localStorage.getItem(key);
+        if (item) setStoredValue(JSON.parse(item));
+      } catch (e) {}
+      setIsLoaded(true);
+    });
+
+    return () => unsubscribe();
+  }, [key]);
+
+  const setValue = async (value) => {
     try {
       const valueToStore = value instanceof Function ? value(storedValue) : value;
       setStoredValue(valueToStore);
+      
       if (typeof window !== "undefined") {
         window.localStorage.setItem(key, JSON.stringify(valueToStore));
       }
+
+      const docRef = doc(db, "financeTracker", "user_data");
+      await setDoc(docRef, { [key]: valueToStore }, { merge: true });
     } catch (error) {
-      console.warn("Error setting localStorage", error);
+      console.warn("Error updating Firebase/LocalStorage", error);
     }
   };
 
   return [storedValue, setValue];
 }
-
 
 // 8-bit blips + pixel sparkles on every press. Purely cosmetic; has its own mute toggle.
 function PixelFX() {
@@ -108,7 +131,7 @@ function PixelFX() {
           o.start(t); o.stop(t + dur);
           t += dur * 0.9;
         });
-      } catch (e) { /* sound is optional */ }
+      } catch (e) {}
     };
     const burst = (x, y, n, colors) => {
       if (reduce) return;
@@ -132,10 +155,10 @@ function PixelFX() {
       const el = e.target.closest && e.target.closest('button, select, h2.kutitap-title');
       if (!el || el.disabled) return;
       const label = (el.textContent || '').trim();
-      if (label === 'Not Paid') {            // about to become Paid: coin jingle
+      if (label === 'Not Paid') {
         tone([[660, 0.06], [880, 0.06], [1320, 0.14]]);
         burst(e.clientX, e.clientY, 12, ['#ffd86b', '#fff3d4', '#f0589a']);
-      } else if (label === 'Paid') {         // un-paid: little sad blip
+      } else if (label === 'Paid') {
         tone([[330, 0.08], [220, 0.12]]);
         burst(e.clientX, e.clientY, 4, ['#8a5a74', '#ffe9a8']);
       } else {
@@ -167,7 +190,7 @@ function PixelFX() {
       onClick={() => {
         const next = !muted;
         setMuted(next);
-        try { window.localStorage.setItem('kutitap_sfx', next ? 'off' : 'on'); } catch (e) { /* ignore */ }
+        try { window.localStorage.setItem('kutitap_sfx', next ? 'off' : 'on'); } catch (e) {}
       }}
     >
       {muted ? <VolumeX size={20} /> : <Volume2 size={20} />}
@@ -176,8 +199,8 @@ function PixelFX() {
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useLocalStorage('kutitap_activeTab', 'dashboard');
-  const [isSidebarOpen, setIsSidebarOpen] = useLocalStorage('kutitap_sidebarOpen', true);
+  const [activeTab, setActiveTab] = useFirebaseSync('kutitap_activeTab', 'dashboard');
+  const [isSidebarOpen, setIsSidebarOpen] = useFirebaseSync('kutitap_sidebarOpen', true);
 
   // Month & Year State
   const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -208,8 +231,8 @@ export default function App() {
       .catch(() => setUsdToPhpRate(56.50));
   }, []);
 
-  // Persistent States - Cleaned of dummy data
-  const [incomes, setIncomes] = useLocalStorage('kutitap_incomes', {});
+  // Persistent States - Backed by Firebase Firestore
+  const [incomes, setIncomes] = useFirebaseSync('kutitap_incomes', {});
   const currentIncome = incomes[currentKey] || { expected: '', actual: '' };
 
   const handleIncomeChange = (field, value) => {
@@ -219,7 +242,7 @@ export default function App() {
     }));
   };
 
-  const [utilityBills, setUtilityBills] = useLocalStorage('kutitap_utilities', {});
+  const [utilityBills, setUtilityBills] = useFirebaseSync('kutitap_utilities', {});
   const defaultUtilities = {
     'PAG-IBIG House': { amount: '', paid: false },
     'PLDT WiFi': { amount: '', paid: false },
@@ -274,7 +297,7 @@ export default function App() {
     'Atome': { columns: ['Bills', 'Card'], cells: {}, paidStatus: {} },
     'TikTokPayLater': { columns: ['Orders'], cells: {}, paidStatus: {} }
   };
-  const [loanTableData, setLoanTableData] = useLocalStorage('kutitap_loans', initialLoanData);
+  const [loanTableData, setLoanTableData] = useFirebaseSync('kutitap_loans', initialLoanData);
 
   const [isAddColumnModalOpen, setIsAddColumnModalOpen] = useState(false);
   const [newColumnName, setNewColumnName] = useState('');
@@ -446,7 +469,7 @@ export default function App() {
     });
   });
 
-  const [savingsGoals, setSavingsGoals] = useLocalStorage('kutitap_savings', []);
+  const [savingsGoals, setSavingsGoals] = useFirebaseSync('kutitap_savings', []);
   const [isAddGoalModalOpen, setIsAddGoalModalOpen] = useState(false);
   const [newGoalName, setNewGoalName] = useState('');
   const [newGoalAmount, setNewGoalAmount] = useState('');
@@ -553,7 +576,7 @@ export default function App() {
   const activeSavingsCount = savingsGoals.length;
   const overallSavingsProgressPct = totalSavingsGoalsAmount > 0 ? Math.min(100, Math.round((totalSavingsSavedAmount / totalSavingsGoalsAmount) * 100)) : 0;
 
-  const [monthlyExpenses, setMonthlyExpenses] = useLocalStorage('kutitap_expenses', {});
+  const [monthlyExpenses, setMonthlyExpenses] = useFirebaseSync('kutitap_expenses', {});
   const currentExpenses = monthlyExpenses[currentKey] || [];
 
   const handleAddExpense = () => {
@@ -588,7 +611,7 @@ export default function App() {
 
   const [attMonthIndex, setAttMonthIndex] = useState(() => new Date().getMonth());
   const [attYear, setAttYear] = useState(() => new Date().getFullYear());
-  const [attendanceRecords, setAttendanceRecords] = useLocalStorage('kutitap_attendance', {});
+  const [attendanceRecords, setAttendanceRecords] = useFirebaseSync('kutitap_attendance', {});
   const [isSwipingID, setIsSwipingID] = useState(false);
 
   const attMonthName = months[attMonthIndex];
