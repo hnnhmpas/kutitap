@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   LayoutDashboard,
   Receipt,
@@ -14,19 +14,170 @@ import {
   TrendingUp,
   TrendingDown,
   ShieldCheck,
-  Award,
   Sparkles,
   Clock,
   Star,
   X,
-  Heart,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  FileText,
+  Volume2,
+  VolumeX
 } from 'lucide-react';
+import './pixel-theme.css';
+
+// Pixel sprites (sliced from the badge sheet)
+import spApple from './assets/pixel/apple.png';
+import spClover from './assets/pixel/clover.png';
+import spFlower from './assets/pixel/flower.png';
+import spStrawberry from './assets/pixel/strawberry.png';
+import spPudding from './assets/pixel/pudding.png';
+import spDango from './assets/pixel/dango.png';
+import spToast from './assets/pixel/toast.png';
+import spStamp from './assets/pixel/stamp.png';
+import spBunny from './assets/pixel/bunny.png';
+import spTama from './assets/pixel/tama.png';
+
+const NAV_SPRITES = {
+  dashboard: spTama,
+  'income-expense': spToast,
+  savings: spPudding,
+  loans: spStamp,
+  attendance: spClover
+};
+const Sprite = ({ src, className = '' }) => (
+  <img src={src} alt="" draggable={false} className={`px-sprite ${className}`} />
+);
+
+// Custom hook to handle Local Storage persistence
+function useLocalStorage(key, initialValue) {
+  const [storedValue, setStoredValue] = useState(() => {
+    if (typeof window === "undefined") return initialValue;
+    try {
+      const item = window.localStorage.getItem(key);
+      return item ? JSON.parse(item) : initialValue;
+    } catch (error) {
+      console.warn("Error reading localStorage", error);
+      return initialValue;
+    }
+  });
+
+  const setValue = (value) => {
+    try {
+      const valueToStore = value instanceof Function ? value(storedValue) : value;
+      setStoredValue(valueToStore);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(key, JSON.stringify(valueToStore));
+      }
+    } catch (error) {
+      console.warn("Error setting localStorage", error);
+    }
+  };
+
+  return [storedValue, setValue];
+}
+
+
+// 8-bit blips + pixel sparkles on every press. Purely cosmetic; has its own mute toggle.
+function PixelFX() {
+  const [muted, setMuted] = useState(() => {
+    try { return window.localStorage.getItem('kutitap_sfx') === 'off'; } catch (e) { return false; }
+  });
+  const mutedRef = useRef(muted);
+  mutedRef.current = muted;
+  const audioRef = useRef(null);
+
+  useEffect(() => {
+    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const tone = (notes, vol = 0.035) => {
+      if (mutedRef.current) return;
+      try {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) return;
+        const ctx = audioRef.current || (audioRef.current = new Ctx());
+        if (ctx.state === 'suspended') ctx.resume();
+        let t = ctx.currentTime;
+        notes.forEach(([freq, dur]) => {
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.type = 'square';
+          o.frequency.setValueAtTime(freq, t);
+          g.gain.setValueAtTime(vol, t);
+          g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+          o.connect(g); g.connect(ctx.destination);
+          o.start(t); o.stop(t + dur);
+          t += dur * 0.9;
+        });
+      } catch (e) { /* sound is optional */ }
+    };
+    const burst = (x, y, n, colors) => {
+      if (reduce) return;
+      for (let i = 0; i < n; i++) {
+        const p = document.createElement('div');
+        const size = 4 + Math.floor(Math.random() * 3) * 2;
+        p.style.cssText = `position:fixed;left:${x}px;top:${y}px;width:${size}px;height:${size}px;background:${colors[i % colors.length]};box-shadow:0 0 0 2px #4a1d36;pointer-events:none;z-index:99999`;
+        document.body.appendChild(p);
+        const ang = (Math.PI * 2 * i) / n + Math.random() * 0.5;
+        const d = 24 + Math.random() * 30;
+        const dx = Math.cos(ang) * d;
+        const dy = Math.sin(ang) * d;
+        const anim = p.animate(
+          [{ transform: 'translate(0,0)', opacity: 1 }, { transform: `translate(${dx}px,${dy - 14}px)`, opacity: 1, offset: 0.7 }, { transform: `translate(${dx}px,${dy + 10}px)`, opacity: 0 }],
+          { duration: 520, easing: 'steps(6)' }
+        );
+        anim.onfinish = () => p.remove();
+      }
+    };
+    const onDown = (e) => {
+      const el = e.target.closest && e.target.closest('button, select, h2.kutitap-title');
+      if (!el || el.disabled) return;
+      const label = (el.textContent || '').trim();
+      if (label === 'Not Paid') {            // about to become Paid: coin jingle
+        tone([[660, 0.06], [880, 0.06], [1320, 0.14]]);
+        burst(e.clientX, e.clientY, 12, ['#ffd86b', '#fff3d4', '#f0589a']);
+      } else if (label === 'Paid') {         // un-paid: little sad blip
+        tone([[330, 0.08], [220, 0.12]]);
+        burst(e.clientX, e.clientY, 4, ['#8a5a74', '#ffe9a8']);
+      } else {
+        tone([[520, 0.05], [780, 0.07]]);
+        burst(e.clientX, e.clientY, 6, ['#f0589a', '#ffd86b', '#9be58a']);
+      }
+    };
+    let lastKey = 0;
+    const onInput = (e) => {
+      const now = performance.now();
+      if (now - lastKey < 45 || !(e.target && e.target.matches && e.target.matches('input'))) return;
+      lastKey = now;
+      tone([[900 + Math.random() * 250, 0.025]], 0.015);
+    };
+    document.addEventListener('pointerdown', onDown, true);
+    document.addEventListener('input', onInput, true);
+    return () => {
+      document.removeEventListener('pointerdown', onDown, true);
+      document.removeEventListener('input', onInput, true);
+    };
+  }, []);
+
+  return (
+    <button
+      type="button"
+      className="px-sfx"
+      aria-label={muted ? 'Turn sound on' : 'Turn sound off'}
+      title={muted ? 'Sound off' : 'Sound on'}
+      onClick={() => {
+        const next = !muted;
+        setMuted(next);
+        try { window.localStorage.setItem('kutitap_sfx', next ? 'off' : 'on'); } catch (e) { /* ignore */ }
+      }}
+    >
+      {muted ? <VolumeX size={20} /> : <Volume2 size={20} />}
+    </button>
+  );
+}
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('dashboard');
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [activeTab, setActiveTab] = useLocalStorage('kutitap_activeTab', 'dashboard');
+  const [isSidebarOpen, setIsSidebarOpen] = useLocalStorage('kutitap_sidebarOpen', true);
 
   // Month & Year State
   const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -39,6 +190,7 @@ export default function App() {
   // Live USD to PHP exchange rate state
   const [usdToPhpRate, setUsdToPhpRate] = useState(56.50);
   const [rateTrend, setRateTrend] = useState('up');
+  const [historicalRates, setHistoricalRates] = useState({});
 
   useEffect(() => {
     fetch('https://api.exchangerate-api.com/v4/latest/USD')
@@ -53,16 +205,11 @@ export default function App() {
           });
         }
       })
-      .catch(() => {
-        setUsdToPhpRate(56.50);
-      });
+      .catch(() => setUsdToPhpRate(56.50));
   }, []);
 
-  // Monthly Income State (Philippine Peso)
-  const [incomes, setIncomes] = useState({
-    'February-2026': { expected: '50000', actual: '48500' }
-  });
-
+  // Persistent States - Cleaned of dummy data
+  const [incomes, setIncomes] = useLocalStorage('kutitap_incomes', {});
   const currentIncome = incomes[currentKey] || { expected: '', actual: '' };
 
   const handleIncomeChange = (field, value) => {
@@ -72,29 +219,21 @@ export default function App() {
     }));
   };
 
-  // Utility Bills State
-  const [utilityBills, setUtilityBills] = useState({
-    'February-2026': {
-      'PAG-IBIG House': { amount: '3500', paid: true },
-      'PLDT WiFi': { amount: '1699', paid: false },
-      'Meralco': { amount: '2800', paid: false },
-      'Maynilad': { amount: '650', paid: true }
-    }
-  });
-
-  const currentUtilityBills = utilityBills[currentKey] || {
+  const [utilityBills, setUtilityBills] = useLocalStorage('kutitap_utilities', {});
+  const defaultUtilities = {
     'PAG-IBIG House': { amount: '', paid: false },
     'PLDT WiFi': { amount: '', paid: false },
     'Meralco': { amount: '', paid: false },
     'Maynilad': { amount: '', paid: false }
   };
+  const currentUtilityBills = utilityBills[currentKey] || defaultUtilities;
 
   const handleUtilityAmountChange = (billName, value) => {
     setUtilityBills(prev => ({
       ...prev,
       [currentKey]: {
-        ...currentUtilityBills,
-        [billName]: { ...currentUtilityBills[billName], amount: value }
+        ...(prev[currentKey] || defaultUtilities),
+        [billName]: { ...(prev[currentKey]?.[billName] || defaultUtilities[billName]), amount: value }
       }
     }));
   };
@@ -103,13 +242,12 @@ export default function App() {
     setUtilityBills(prev => ({
       ...prev,
       [currentKey]: {
-        ...currentUtilityBills,
-        [billName]: { ...currentUtilityBills[billName], paid: !currentUtilityBills[billName].paid }
+        ...(prev[currentKey] || defaultUtilities),
+        [billName]: { ...(prev[currentKey]?.[billName] || defaultUtilities[billName]), paid: !(prev[currentKey]?.[billName]?.paid) }
       }
     }));
   };
 
-  // Loans State
   const loanCategories = ['SPayLater', 'SLoan', 'Billease', 'Maya', 'Atome', 'TikTokPayLater'];
   const [activeLoanCategory, setActiveLoanCategory] = useState('SPayLater');
   
@@ -128,29 +266,15 @@ export default function App() {
     return '30';
   };
 
-  const [loanTableData, setLoanTableData] = useState({
-    'SPayLater': {
-      columns: ['Arrears', 'Combined', 'Computer'],
-      cells: {
-        '2026-February-15th': { 'Arrears': '100' },
-        '2026-November-15th': { 'Arrears': '100' },
-        '2026-November-30th': { 'Combined': '150' }
-      },
-      paidStatus: {
-        '2026-November-15th': false,
-        '2026-November-30th': false
-      }
-    },
+  const initialLoanData = {
+    'SPayLater': { columns: ['Arrears', 'Combined', 'Computer'], cells: {}, paidStatus: {} },
     'SLoan': { columns: ['Principal', 'Interest'], cells: {}, paidStatus: {} },
-    'Billease': {
-      columns: ['Installment 1', 'Installment 2'],
-      cells: { '2026-November-15th': { 'Installment 1': '10000' } },
-      paidStatus: { '2026-November-15th': false }
-    },
+    'Billease': { columns: ['Installment 1', 'Installment 2'], cells: {}, paidStatus: {} },
     'Maya': { columns: ['Credit', 'PayLater'], cells: {}, paidStatus: {} },
     'Atome': { columns: ['Bills', 'Card'], cells: {}, paidStatus: {} },
     'TikTokPayLater': { columns: ['Orders'], cells: {}, paidStatus: {} }
-  });
+  };
+  const [loanTableData, setLoanTableData] = useLocalStorage('kutitap_loans', initialLoanData);
 
   const [isAddColumnModalOpen, setIsAddColumnModalOpen] = useState(false);
   const [newColumnName, setNewColumnName] = useState('');
@@ -235,7 +359,6 @@ export default function App() {
         const catData = prev[activeLoanCategory];
         const updatedColumns = catData.columns.filter(c => c !== colName);
         
-        // Clean up deleted column data from cells so totals update correctly
         const updatedCells = {};
         Object.entries(catData.cells || {}).forEach(([rowKey, rowCells]) => {
           const newRowCells = { ...rowCells };
@@ -257,7 +380,6 @@ export default function App() {
     }
   };
 
-  // Calculations
   const getCutoffSummary = (month, year, cutoff) => {
     let totalAmt = 0;
     let isPaid = true;
@@ -288,27 +410,10 @@ export default function App() {
   const current15Summary = getCutoffSummary(currentMonthName, currentYear, '15th');
   const current30Summary = getCutoffSummary(currentMonthName, currentYear, '30th');
 
-  const consolidatedLoanItems = [];
-  if (current15Summary.total > 0) {
-    consolidatedLoanItems.push({
-      id: `${currentKey}-15th`,
-      cutoffKey: '15th',
-      name: `Loans (${currentMonthName} 15th Cutoff)`,
-      amount: current15Summary.total,
-      paid: current15Summary.paid
-    });
-  }
-  if (current30Summary.total > 0) {
-    consolidatedLoanItems.push({
-      id: `${currentKey}-30th`,
-      cutoffKey: '30th',
-      name: `Loans (${currentMonthName} ${getCutoff30Label(currentMonthName, currentYear)}th Cutoff)`,
-      amount: current30Summary.total,
-      paid: current30Summary.paid
-    });
-  }
-
-  const loansTotalForCurrentMonth = consolidatedLoanItems.reduce((sum, item) => sum + item.amount, 0);
+  const totalConsolidatedLoansAmt = current15Summary.total + current30Summary.total;
+  const isConsolidatedLoansPaid = (current15Summary.hasEntries || current30Summary.hasEntries) && 
+    (current15Summary.hasEntries ? current15Summary.paid : true) && 
+    (current30Summary.hasEntries ? current30Summary.paid : true);
 
   let yearTotalCost = 0;
   let yearTotalPaid = 0;
@@ -341,27 +446,8 @@ export default function App() {
     });
   });
 
-  // Savings State
+  const [savingsGoals, setSavingsGoals] = useLocalStorage('kutitap_savings', []);
   const [isAddGoalModalOpen, setIsAddGoalModalOpen] = useState(false);
-  const [savingsGoals, setSavingsGoals] = useState([
-    {
-      id: 1,
-      name: 'Christmas and New Year Fund',
-      goalAmount: 30000,
-      startMonth: 'August',
-      startYear: 2026,
-      endMonth: 'December',
-      endYear: 2026,
-      monthsList: [
-        { monthKey: 'August-2026', amount: 6000, paid: true },
-        { monthKey: 'September-2026', amount: 6000, paid: false },
-        { monthKey: 'October-2026', amount: 6000, paid: false },
-        { monthKey: 'November-2026', amount: 6000, paid: false },
-        { monthKey: 'December-2026', amount: 6000, paid: false }
-      ]
-    }
-  ]);
-
   const [newGoalName, setNewGoalName] = useState('');
   const [newGoalAmount, setNewGoalAmount] = useState('');
   const [newStartMonthIndex, setNewStartMonthIndex] = useState(7);
@@ -416,8 +502,37 @@ export default function App() {
   const handleGoalMonthAmountChange = (goalId, monthKey, value) => {
     setSavingsGoals(prev => prev.map(goal => {
       if (goal.id !== goalId) return goal;
-      const updatedMonths = goal.monthsList.map(m => m.monthKey === monthKey ? { ...m, amount: parseFloat(value) || 0 } : m);
-      return { ...goal, monthsList: updatedMonths };
+      const numericVal = value === '' ? 0 : parseFloat(value) || 0;
+      const totalGoal = goal.goalAmount || 0;
+
+      const newMonthsList = goal.monthsList.map(m => {
+        if (m.monthKey === monthKey) {
+          return { ...m, amount: value === '' ? '' : numericVal };
+        }
+        return m;
+      });
+
+      const unassignedTarget = Math.max(0, totalGoal - numericVal);
+      const adjustableItems = newMonthsList.filter(m => m.monthKey !== monthKey);
+
+      if (adjustableItems.length > 0) {
+        const eachSplit = Math.round(unassignedTarget / adjustableItems.length);
+        let accumulated = 0;
+        
+        return {
+          ...goal,
+          monthsList: goal.monthsList.map((m, idx) => {
+            if (m.monthKey === monthKey) {
+              return { ...m, amount: value === '' ? '' : numericVal };
+            }
+            const isLast = idx === goal.monthsList.length - 1 || (idx === goal.monthsList.length - 2 && goal.monthsList[goal.monthsList.length - 1].monthKey === monthKey);
+            const assignedAmt = isLast ? (unassignedTarget - accumulated) : eachSplit;
+            accumulated += assignedAmt;
+            return { ...m, amount: Math.max(0, assignedAmt) };
+          })
+        };
+      }
+      return goal;
     }));
   };
 
@@ -438,8 +553,7 @@ export default function App() {
   const activeSavingsCount = savingsGoals.length;
   const overallSavingsProgressPct = totalSavingsGoalsAmount > 0 ? Math.min(100, Math.round((totalSavingsSavedAmount / totalSavingsGoalsAmount) * 100)) : 0;
 
-  // Expenses State
-  const [monthlyExpenses, setMonthlyExpenses] = useState({});
+  const [monthlyExpenses, setMonthlyExpenses] = useLocalStorage('kutitap_expenses', {});
   const currentExpenses = monthlyExpenses[currentKey] || [];
 
   const handleAddExpense = () => {
@@ -472,16 +586,39 @@ export default function App() {
     else setCurrentMonthIndex(currentMonthIndex + 1);
   };
 
-  // Attendance State
   const [attMonthIndex, setAttMonthIndex] = useState(() => new Date().getMonth());
   const [attYear, setAttYear] = useState(() => new Date().getFullYear());
-  const [attendanceRecords, setAttendanceRecords] = useState({
-    '2026-10-29': { timedIn: true, time: '6:54 AM', status: 'Late', holidayOrLeave: '' }
-  });
+  const [attendanceRecords, setAttendanceRecords] = useLocalStorage('kutitap_attendance', {});
   const [isSwipingID, setIsSwipingID] = useState(false);
 
   const attMonthName = months[attMonthIndex];
   const maxAttYears = Array.from({ length: 11 }, (_, i) => 2026 + i);
+
+  const currentDate = new Date();
+  const currentY = currentDate.getFullYear();
+  const currentM = currentDate.getMonth();
+  
+  const isPastMonth = attYear < currentY || (attYear === currentY && attMonthIndex < currentM);
+  const lastDayOfAttMonth = new Date(attYear, attMonthIndex + 1, 0).getDate();
+  const pastDateStr = `${attYear}-${String(attMonthIndex + 1).padStart(2, '0')}-${String(lastDayOfAttMonth).padStart(2, '0')}`;
+
+  useEffect(() => {
+    if (isPastMonth && !historicalRates[pastDateStr]) {
+      fetch(`https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@${pastDateStr}/v1/currencies/usd.json`)
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.usd && data.usd.php) {
+            setHistoricalRates(prev => ({ ...prev, [pastDateStr]: data.usd.php }));
+          }
+        })
+        .catch(err => {
+          console.warn("Historical rate fetch failed", err);
+          setHistoricalRates(prev => ({ ...prev, [pastDateStr]: usdToPhpRate }));
+        });
+    }
+  }, [attYear, attMonthIndex, isPastMonth, pastDateStr, historicalRates, usdToPhpRate]);
+
+  const displayRate = isPastMonth ? (historicalRates[pastDateStr] || usdToPhpRate) : usdToPhpRate;
 
   const getWorkingDaysInMonth = (mIdx, yVal) => {
     const days = [];
@@ -489,36 +626,27 @@ export default function App() {
     for (let d = 1; d <= totalDays; d++) {
       const dateObj = new Date(yVal, mIdx, d);
       const dayOfWeek = dateObj.getDay();
-      if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-        days.push(d);
-      }
+      if (dayOfWeek !== 0 && dayOfWeek !== 6) days.push(d);
     }
     return days;
   };
 
   const workingDays = getWorkingDaysInMonth(attMonthIndex, attYear);
 
-  // Helper function to evaluate status based on time-in timestamp and night shift rules
   const evaluateStatusFromTime = (timeDate) => {
     const hours = timeDate.getHours();
     const minutes = timeDate.getMinutes();
     const totalMinutes = hours * 60 + minutes;
 
-    if (totalMinutes > 7 * 60 && totalMinutes <= 21 * 60) {
-      return 'Out of Shift';
-    } else if (totalMinutes > 21 * 60 && totalMinutes <= 22 * 60) {
-      return 'Present';
-    } else {
-      return 'Late';
-    }
+    if (totalMinutes > 7 * 60 && totalMinutes <= 21 * 60) return 'Out of Shift';
+    else if (totalMinutes > 21 * 60 && totalMinutes <= 22 * 60) return 'Present';
+    else return 'Late';
   };
 
   const handleTimeInToday = () => {
     const today = new Date();
     const currentHour = today.getHours();
     
-    // Night Shift Bleed Rule: If time-in is between midnight (00:00) and 7:00 AM, 
-    // it belongs to the previous shift date (e.g. Thursday night shift bleeding into Friday morning).
     let targetDate = new Date(today);
     if (currentHour >= 0 && currentHour <= 7) {
       targetDate.setDate(targetDate.getDate() - 1);
@@ -539,9 +667,7 @@ export default function App() {
     const evaluatedStatus = evaluateStatusFromTime(today);
 
     setIsSwipingID(true);
-    setTimeout(() => {
-      setIsSwipingID(false);
-    }, 800);
+    setTimeout(() => setIsSwipingID(false), 800);
 
     setAttendanceRecords(prev => ({
       ...prev,
@@ -567,7 +693,7 @@ export default function App() {
     }
   });
 
-  const estimatedSalaryPHP = Math.round(totalWorkedHours * 7.50 * usdToPhpRate);
+  const estimatedSalaryPHP = Math.round(totalWorkedHours * 7.50 * displayRate);
 
   useEffect(() => {
     const targetKey = `${months[attMonthIndex]}-${attYear}`;
@@ -581,6 +707,95 @@ export default function App() {
     });
   }, [estimatedSalaryPHP, attMonthIndex, attYear]);
 
+  const handleGenerateInvoicePDF = () => {
+    const weeksMap = {};
+    workingDays.forEach(d => {
+      const firstDayOfMonth = new Date(attYear, attMonthIndex, 1).getDay();
+      const weekNum = Math.floor((d + firstDayOfMonth - 1) / 7) + 1;
+      
+      const mmStr = String(attMonthIndex + 1).padStart(2, '0');
+      const ddStr = String(d).padStart(2, '0');
+      const dateKey = `${attYear}-${mmStr}-${ddStr}`;
+      const rec = attendanceRecords[dateKey];
+      const isWorked = rec && (rec.status === 'Present' || rec.status === 'Late');
+
+      if (!weeksMap[weekNum]) weeksMap[weekNum] = [];
+      weeksMap[weekNum].push({ day: d, worked: isWorked });
+    });
+
+    const monthShortName = attMonthName.slice(0, 3);
+    const formattedWeeks = Object.entries(weeksMap).map(([wNum, daysArr]) => {
+      const workedDaysInWeek = daysArr.filter(item => item.worked);
+      const hoursWorked = workedDaysInWeek.length * 8;
+      
+      let dateStr = '';
+      if (daysArr.length > 0) {
+        const firstDay = daysArr[0].day;
+        const lastDay = daysArr[daysArr.length - 1].day;
+        const getOrdinal = (n) => {
+          const s = ["th", "st", "nd", "rd"];
+          const v = n % 100;
+          return n + (s[(v - 20) % 10] || s[v] || s[0]);
+        };
+        dateStr = `${monthShortName} ${getOrdinal(firstDay)} - ${monthShortName} ${getOrdinal(lastDay)} ${attYear}`;
+      }
+      return { workPerformed: `Week ${wNum}`, datesWorked: dateStr, hours: hoursWorked };
+    }).filter(w => w.hours > 0);
+
+    const totalInvoiceHours = formattedWeeks.reduce((sum, w) => sum + w.hours, 0);
+    const payForHoursWorked = totalInvoiceHours * 7.50;
+    const formattedPay = `$${payForHoursWorked.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Hannah Mae Pascaran - ${attMonthName}, ${attYear} Invoice</title>
+        <style>
+          body { font-family: Arial, sans-serif; color: #000; margin: 30px; font-size: 11px; line-height: 1.3; }
+          h2 { text-align: center; font-size: 16px; font-weight: bold; margin-bottom: 20px; }
+          .section-header { font-weight: bold; background-color: #f2f2f2; padding: 4px 6px; margin-top: 10px; margin-bottom: 5px; border-top: 1px solid #ccc; border-bottom: 1px solid #ccc; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+          td, th { border: 1px solid #d3d3d3; padding: 6px 8px; vertical-align: top; }
+          th { background-color: #f9f9f9; font-weight: bold; text-align: left; }
+          .right { text-align: right; }
+          .notes { font-size: 10px; color: #333; margin-top: 15px; }
+        </style>
+      </head>
+      <body>
+        <h2>INDEPENDENT CONTRACTOR INVOICE</h2>
+        <table><tr><td style="width: 30%;"><strong>INVOICE TO:</strong></td><td>Boostability</td></tr><tr><td><strong>INVOICE DATE:</strong></td><td>${attMonthName}-${attYear}</td></tr></table>
+        <div class="section-header">CONTRACTOR INFORMATION</div>
+        <table><tr><td style="width: 30%;"><strong>NAME:</strong></td><td>Hannah Mae Pascaran</td></tr><tr><td><strong>PHONE NUMBER:</strong></td><td>09950281082</td></tr><tr><td><strong>EMAIL:</strong></td><td>hannahmae.pascaran@gmail.com</td></tr><tr><td><strong>ADDRESS:</strong></td><td>Block 14 Lot 15 Daphne Road Molino Parkhomes Queen's Row West Bacoor City 4102, Cavite Philippines</td></tr></table>
+        <div class="section-header">PAYMENT INFORMATION</div>
+        <table><tr><td style="width: 30%;"><strong>HOURLY RATE ($USD):</strong></td><td>$7.50</td></tr><tr><td><strong>BANK NAME:</strong></td><td>GoTyme Bank</td></tr><tr><td><strong>ACCOUNT NAME:</strong></td><td>Hannah Mae Pascaran</td></tr><tr><td><strong>ACCOUNT NUMBER:</strong></td><td>010680295154</td></tr><tr><td><strong>SWIFT NUMBER:</strong></td><td>GOTYPHM2XXX</td></tr><tr><td><strong>ADDRESS ASSOCIATED WITH ACCOUNT:</strong></td><td>21st Floor Giga Tower, Bridgetowne, C5 Road, Brgy Ugong Norte, E. Rodriguez Jr. Ave 1110 Quezon City, Philippines</td></tr></table>
+        <div class="section-header">WORK PERFORMED</div>
+        <table>
+          <thead><tr><th style="width: 35%;">WORK PERFORMED</th><th style="width: 45%;">DATES WORKED</th><th class="right" style="width: 20%;">NUMBER OF HOURS WORKED</th></tr></thead>
+          <tbody>
+            ${formattedWeeks.map(w => `<tr><td>${w.workPerformed}</td><td>${w.datesWorked}</td><td class="right">${w.hours}</td></tr>`).join('')}
+            <tr><td><strong>TOTAL HOURS</strong></td><td></td><td class="right"><strong>${totalInvoiceHours}</strong></td></tr>
+            <tr><td><strong>PAY FOR HOURS WORKED</strong></td><td></td><td class="right"><strong>${formattedPay}</strong></td></tr>
+            <tr><td><strong>OTHER AMOUNT</strong><br><span style="font-size:9px; color:#555;">Reason for Other Amount</span></td><td></td><td class="right"><strong>$0.00</strong></td></tr>
+            <tr><td><strong>TOTAL PAYMENT OWED</strong></td><td></td><td class="right"><strong>${formattedPay}</strong></td></tr>
+          </tbody>
+        </table>
+        <div class="notes"><p><strong>Payment Schedule:</strong><br>Your payment will be processed by the 5th business day of each month.</p></div>
+        <script>window.onload = function() { window.print(); };</script>
+      </body>
+      </html>
+    `;
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+    } else {
+      alert("Please allow pop-ups to generate and print your PDF invoice.");
+    }
+  };
+
   const actualNum = parseFloat(currentIncome.actual) || 0;
   const expectedNum = parseFloat(currentIncome.expected) || 0;
   const diffNum = actualNum - expectedNum;
@@ -592,9 +807,11 @@ export default function App() {
 
   const savingsTotalFromGoals = currentMonthSavingsItems.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
   const utilityItems = Object.values(currentUtilityBills);
-  const obligationItems = [...utilityItems, ...consolidatedLoanItems, ...currentMonthSavingsItems];
+  const obligationItems = [...utilityItems, ...currentMonthSavingsItems];
+  if (totalConsolidatedLoansAmt > 0) obligationItems.push({ paid: isConsolidatedLoansPaid });
+
   const utilityTotal = utilityItems.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
-  const obligationTotal = utilityTotal + loansTotalForCurrentMonth + savingsTotalFromGoals;
+  const obligationTotal = utilityTotal + totalConsolidatedLoansAmt + savingsTotalFromGoals;
   const obligationPaidCount = obligationItems.filter(item => item.paid).length;
   const obligationPaidPct = obligationItems.length > 0 ? Math.round((obligationPaidCount / obligationItems.length) * 100) : 0;
 
@@ -640,11 +857,11 @@ export default function App() {
   else if (currentHourVal < 18) timeGreeting = "Good afternoon";
 
   const funQuotesPool = [
-    { text: "I love you more than butter! Let's get that money right and sweet!" },
-    { text: "February: Short month, big cozy moves, zero budget stress!" },
-    { text: "March into savings like the sweet butter bear queen you are!" },
-    { text: "Bloom where you're planted, and sweeten your bank account too!" },
-    { text: "Sunshine is warm, but your financial goals are sweeter. Let's crush them!" }
+    { text: "Your goals are sparkling! Let's get that money right and sweet! ✨" },
+    { text: "Small steps make big leaps. Cozy moves, zero budget stress!" },
+    { text: "March into savings like the shining star you are! ✨" },
+    { text: "Bloom where you're planted, and sweeten your bank account too! 🌸" },
+    { text: "Sunshine is warm, but your financial goals are brighter. Let's crush them! ☀️" }
   ];
   const currentQuote = funQuotesPool[currentMonthIndex % funQuotesPool.length];
 
@@ -659,58 +876,29 @@ export default function App() {
   return (
     <>
       <script src="https://cdn.tailwindcss.com"></script>
-      <div style={{
+      <PixelFX />
+      <div className="px-root" style={{
         position: 'fixed',
         inset: 0,
         width: '100vw',
         height: '100vh',
-        backgroundColor: '#FFFBEA',
+        backgroundColor: 'var(--px-paper)',
         fontFamily: "'Quicksand', sans-serif",
-        color: '#4A3B32',
+        color: 'var(--ink)',
         display: 'flex',
         boxSizing: 'border-box',
         overflow: 'hidden',
         margin: 0,
         padding: 0,
-        backgroundImage: 'radial-gradient(#FFEAA7 1.5px, transparent 1.5px)',
+        backgroundImage: 'radial-gradient(var(--px-sun) 1.5px, transparent 1.5px)',
         backgroundSize: '24px 24px'
       }}>
-        <style>{`
-          @import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@500;600;700;800&family=Playfair+Display:wght@700;800&display=swap');
-          * { font-family: 'Quicksand', sans-serif; box-sizing: border-box; border: none; outline: none; }
-          .butter-title { font-family: 'Playfair Display', serif; }
-          
-          @keyframes swipeRight {
-            0% { transform: translateX(-100px); opacity: 0; }
-            50% { transform: translateX(20px); opacity: 1; }
-            100% { transform: translateX(0px); opacity: 1; }
-          }
-          .animate-swipe-id {
-            animation: swipeRight 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-          }
-
-          button, select, input {
-            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-          }
-          button:hover {
-            transform: translateY(-1px);
-          }
-          button:active {
-            transform: scale(0.97);
-          }
-
-          ::-webkit-scrollbar { width: 8px; height: 8px; }
-          ::-webkit-scrollbar-track { background: #FFF3CD; border-radius: 9999px; }
-          ::-webkit-scrollbar-thumb { background: #DFB15B; border-radius: 9999px; border: 2px solid #FFF3CD; }
-          ::-webkit-scrollbar-thumb-hover { background: #C68B59; }
-        `}</style>
-
         {/* SIDEBAR */}
-        <div style={{
+        <div className="px-sidebar" style={{
           width: isSidebarOpen ? '260px' : '80px',
           minWidth: isSidebarOpen ? '260px' : '80px',
           backgroundColor: '#FFFFFF',
-          borderRadius: '0 32px 32px 0',
+          borderRadius: 0, '--px': 'panel',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'space-between',
@@ -725,22 +913,22 @@ export default function App() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
               {isSidebarOpen && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Sparkles style={{ width: '22px', height: '22px', color: '#DFB15B' }} />
-                  <span className="butter-title" style={{ fontSize: '18px', color: '#C68B59', letterSpacing: '0.5px' }}>Butter Bear</span>
+                  <Sprite src={spFlower} className="px-logo-sprite" />
+                  <span className="kutitap-title px-logo">Kutitap</span>
                 </div>
               )}
               <button
                 onClick={() => setIsSidebarOpen(!isSidebarOpen)}
                 style={{
-                  backgroundColor: '#FFF9E6',
-                  borderRadius: '9999px',
+                  backgroundColor: 'var(--px-card)',
+                  borderRadius: 0, '--px': 'pill',
                   width: '34px',
                   height: '34px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   cursor: 'pointer',
-                  color: '#C68B59',
+                  color: 'var(--px-accent)',
                   fontWeight: 700,
                   boxShadow: '0 4px 12px rgba(223,177,91,0.2)',
                   margin: isSidebarOpen ? '0' : '0 auto'
@@ -757,24 +945,25 @@ export default function App() {
                 return (
                   <button
                     key={item.id}
+                    className={`px-nav${isActive ? ' px-nav-active' : ''}`}
                     onClick={() => setActiveTab(item.id)}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
                       gap: '12px',
                       padding: '12px 16px',
-                      borderRadius: '9999px',
+                      borderRadius: 0, '--px': 'pill',
                       fontWeight: 700,
                       fontSize: '14px',
                       cursor: 'pointer',
                       width: '100%',
                       textAlign: 'left',
-                      backgroundColor: isActive ? '#FFEAA7' : 'transparent',
-                      color: isActive ? '#5C3A21' : '#8C7A6B',
+                      backgroundColor: isActive ? 'var(--px-sun)' : 'transparent',
+                      color: isActive ? 'var(--ink)' : 'var(--px-muted)',
                       boxShadow: isActive ? '0 6px 16px rgba(255,234,167,0.5)' : 'none'
                     }}
                   >
-                    <IconComponent style={{ width: '20px', height: '20px', minWidth: '20px' }} />
+                    <Sprite src={NAV_SPRITES[item.id]} className="px-nav-sprite" />
                     {isSidebarOpen && <span style={{ whiteSpace: 'nowrap' }}>{item.label}</span>}
                   </button>
                 );
@@ -784,18 +973,18 @@ export default function App() {
 
           <div style={{ paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {isSidebarOpen ? (
-              <div style={{ backgroundColor: '#FFF9E6', borderRadius: '24px', padding: '12px 14px', display: 'flex', alignItems: 'center', gap: '10px', boxShadow: '0 4px 15px rgba(223,177,91,0.1)' }}>
-                <div style={{ width: '38px', height: '38px', borderRadius: '9999px', backgroundColor: '#FFEAA7', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, color: '#C68B59', flexShrink: 0, fontSize: '14px' }}>
-                  🐻
+              <div style={{ backgroundColor: 'var(--px-card)', borderRadius: 0, '--px': 'card', padding: '12px 14px', display: 'flex', alignItems: 'center', gap: '10px', boxShadow: '0 4px 15px rgba(223,177,91,0.1)' }}>
+                <div style={{ width: '38px', height: '38px', borderRadius: 0, '--px': 'pill', backgroundColor: 'var(--px-sun)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, color: 'var(--px-accent)', flexShrink: 0, fontSize: '14px' }}>
+                  <Sprite src={spBunny} className="px-avatar-sprite" />
                 </div>
                 <div style={{ overflow: 'hidden' }}>
-                  <div style={{ fontSize: '13px', fontWeight: 800, color: '#5C3A21', whiteSpace: 'nowrap' }}>Hannah Mae</div>
-                  <div style={{ fontSize: '11px', color: '#9E8FB8', fontWeight: 600 }}>Sweet Planner</div>
+                  <div style={{ fontSize: '13px', fontWeight: 800, color: 'var(--ink)', whiteSpace: 'nowrap' }}>Hannah Mae</div>
+                  <div style={{ fontSize: '11px', color: 'var(--px-lav)', fontWeight: 600 }}>Sweet Planner</div>
                 </div>
               </div>
             ) : (
               <div style={{ textAlign: 'center' }}>
-                <span style={{ fontSize: '24px' }}>🐻</span>
+                <Sprite src={spBunny} className="px-avatar-sprite" />
               </div>
             )}
 
@@ -804,9 +993,9 @@ export default function App() {
               style={{
                 width: '100%',
                 padding: '12px',
-                borderRadius: '9999px',
-                backgroundColor: '#FFF3CD',
-                color: '#C68B59',
+                borderRadius: 0, '--px': 'pill',
+                backgroundColor: 'var(--px-butter)',
+                color: 'var(--px-accent)',
                 fontWeight: 800,
                 fontSize: '12px',
                 cursor: 'pointer',
@@ -824,152 +1013,134 @@ export default function App() {
         </div>
 
         {/* MAIN AREA */}
-        <div style={{ flex: 1, height: '100vh', padding: '20px 28px', boxSizing: 'border-box', overflowY: 'auto', display: 'flex', flexDirection: 'column', width: '100%' }}>
-          
-          {/* HEADER BANNER */}
-          <div style={{ textAlign: 'center', marginBottom: '20px', paddingBottom: '14px', borderBottom: '3px dashed #FFEAA7' }}>
-            <h1 className="butter-title" style={{ fontSize: '34px', color: '#C68B59', letterSpacing: '2px', margin: '0 0 4px 0' }}>
-              BUTTER BEAR BUDGET 🍯
-            </h1>
-            <div style={{ fontSize: '12px', fontWeight: 800, color: '#8C7A6B', textTransform: 'uppercase', letterSpacing: '1px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
-              <span>DASHBOARD</span> • <span>ANNUAL OVERVIEW</span> • <span>BILL CALENDAR</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'center', gap: '6px', marginTop: '8px' }}>
-              {Array.from({ length: 5 }, (_, i) => (
-                <Star key={i} style={{ width: '16px', height: '16px', color: '#DFB15B', fill: '#DFB15B' }} />
-              ))}
-            </div>
-          </div>
+        <div className="px-main" style={{ flex: 1, height: '100vh', padding: '24px 32px', boxSizing: 'border-box', overflowY: 'auto', display: 'flex', flexDirection: 'column', width: '100%' }}>
 
           {/* DASHBOARD TAB */}
           {activeTab === 'dashboard' && (
             <div style={{ width: '100%', display: 'flex', flexDirection: 'column', minHeight: '100%', gap: '20px' }}>
-              <div style={{ background: 'linear-gradient(135deg, #FFF9E6 0%, #FFEAA7 100%)', borderRadius: '32px', padding: '24px 28px', boxShadow: '0 12px 35px rgba(223,177,91,0.2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+              <div style={{ background: 'var(--px-card)', borderRadius: 0, '--px': 'panel', padding: '24px 28px', boxShadow: '0 12px 35px rgba(223,177,91,0.2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
                 <div>
-                  <div style={{ fontSize: '12px', fontWeight: 800, color: '#C68B59', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Sparkles style={{ width: '16px', height: '16px' }} /> Butter Bear Overview
+                  <div style={{ fontSize: '12px', fontWeight: 800, color: 'var(--px-accent)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Sparkles style={{ width: '16px', height: '16px' }} /> Overview
                   </div>
-                  <h2 className="butter-title" style={{ fontSize: '26px', color: '#5C3A21', margin: 0 }}>
-                    {timeGreeting}, Hannah Mae! 🧸
+                  <h2 className="kutitap-title" style={{ fontSize: '26px', color: 'var(--ink)', margin: 0 }}>
+                    {timeGreeting}, Hannah Mae! ✨
                   </h2>
-                  <p style={{ fontSize: '13px', fontWeight: 700, color: '#8C7A6B', marginTop: '4px', marginBottom: 0 }}>
-                    Here is your cozy financial summary filtered for year <span style={{ color: '#C68B59', fontWeight: 800 }}>{dashFilterYear}</span>.
+                  <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--px-muted)', marginTop: '4px', marginBottom: 0 }}>
+                    Here is your cozy financial summary filtered for year <span style={{ color: 'var(--px-accent)', fontWeight: 800 }}>{dashFilterYear}</span>.
                   </p>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#FFFFFF', padding: '8px 16px', borderRadius: '9999px', boxShadow: '0 4px 15px rgba(223,177,91,0.15)' }}>
-                  <span style={{ fontSize: '12px', fontWeight: 800, color: '#5C3A21' }}>Filter Year:</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#FFFFFF', padding: '8px 16px', borderRadius: 0, '--px': 'pill', boxShadow: '0 4px 15px rgba(223,177,91,0.15)' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 800, color: 'var(--ink)' }}>Filter Year:</span>
                   <select
                     value={dashFilterYear}
                     onChange={(e) => setDashFilterYear(parseInt(e.target.value))}
-                    style={{ backgroundColor: '#FFF9E6', borderRadius: '9999px', padding: '6px 14px', fontWeight: 800, color: '#C68B59', fontSize: '13px', cursor: 'pointer' }}
+                    style={{ backgroundColor: 'var(--px-card)', borderRadius: 0, '--px': 'pill', padding: '6px 14px', fontWeight: 800, color: 'var(--px-accent)', fontSize: '13px', cursor: 'pointer' }}
                   >
-                    {availableYears.map(y => (
-                      <option key={y} value={y}>{y}</option>
-                    ))}
+                    {availableYears.map(y => (<option key={y} value={y}>{y}</option>))}
                   </select>
                 </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
-                <div style={{ backgroundColor: '#FFF9E6', borderRadius: '28px', padding: '20px', boxShadow: '0 8px 25px rgba(223,177,91,0.15)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ backgroundColor: 'var(--px-card)', borderRadius: 0, '--px': 'panel', padding: '20px', boxShadow: '0 8px 25px rgba(223,177,91,0.15)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '11px', fontWeight: 800, color: '#C68B59', textTransform: 'uppercase' }}>Annual Income ({dashFilterYear})</span>
-                    <TrendingUp style={{ width: '20px', height: '20px', color: '#C68B59' }} />
+                    <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--px-accent)', textTransform: 'uppercase' }}>Annual Income ({dashFilterYear})</span>
+                    <Sprite src={spApple} className="px-card-sprite" />
                   </div>
-                  <div style={{ fontSize: '24px', fontWeight: 800, color: '#5C3A21' }}>
+                  <div style={{ fontSize: '24px', fontWeight: 800, color: 'var(--ink)' }}>
                     ₱{annualActualIncomeSum.toLocaleString()}
                   </div>
-                  <div style={{ fontSize: '11px', fontWeight: 700, color: '#8C7A6B' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--px-muted)' }}>
                     Actual income recorded
                   </div>
                 </div>
 
-                <div style={{ backgroundColor: '#FFF9E6', borderRadius: '28px', padding: '20px', boxShadow: '0 8px 25px rgba(223,177,91,0.15)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ backgroundColor: 'var(--px-card)', borderRadius: 0, '--px': 'panel', padding: '20px', boxShadow: '0 8px 25px rgba(223,177,91,0.15)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '11px', fontWeight: 800, color: '#C68B59', textTransform: 'uppercase' }}>Annual Dues & Expenses</span>
-                    <TrendingDown style={{ width: '20px', height: '20px', color: '#C68B59' }} />
+                    <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--px-accent)', textTransform: 'uppercase' }}>Annual Dues & Expenses</span>
+                    <Sprite src={spDango} className="px-card-sprite" />
                   </div>
-                  <div style={{ fontSize: '24px', fontWeight: 800, color: '#5C3A21' }}>
+                  <div style={{ fontSize: '24px', fontWeight: 800, color: 'var(--ink)' }}>
                     ₱{annualDuesSum.toLocaleString()}
                   </div>
-                  <div style={{ fontSize: '11px', fontWeight: 700, color: '#8C7A6B' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--px-muted)' }}>
                     Utilities, Bills & Expenses
                   </div>
                 </div>
 
-                <div style={{ backgroundColor: '#F4F9F4', borderRadius: '28px', padding: '20px', boxShadow: '0 8px 25px rgba(200,230,201,0.25)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ backgroundColor: 'var(--px-mint-lt)', borderRadius: 0, '--px': 'panel', padding: '20px', boxShadow: '0 8px 25px rgba(200,230,201,0.25)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '11px', fontWeight: 800, color: '#2E7D32', textTransform: 'uppercase' }}>Total Saved Amount</span>
-                    <PiggyBank style={{ width: '20px', height: '20px', color: '#2E7D32' }} />
+                    <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--px-green-d)', textTransform: 'uppercase' }}>Total Saved Amount</span>
+                    <Sprite src={spStrawberry} className="px-card-sprite" />
                   </div>
-                  <div style={{ fontSize: '24px', fontWeight: 800, color: '#2E7D32' }}>
+                  <div style={{ fontSize: '24px', fontWeight: 800, color: 'var(--px-green-d)' }}>
                     ₱{totalSavingsSavedAmount.toLocaleString()} <span style={{ fontSize: '13px' }}>({overallSavingsProgressPct}%)</span>
                   </div>
-                  <div style={{ fontSize: '11px', fontWeight: 700, color: '#2E7D32' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--px-green-d)' }}>
                     Goal Target: ₱{totalSavingsGoalsAmount.toLocaleString()}
                   </div>
                 </div>
 
-                <div style={{ backgroundColor: '#FFF3CD', borderRadius: '28px', padding: '20px', boxShadow: '0 8px 25px rgba(223,177,91,0.15)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ backgroundColor: 'var(--px-butter)', borderRadius: 0, '--px': 'panel', padding: '20px', boxShadow: '0 8px 25px rgba(223,177,91,0.15)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '11px', fontWeight: 800, color: '#C68B59', textTransform: 'uppercase' }}>Loan Balances ({dashFilterYear})</span>
-                    <CreditCard style={{ width: '20px', height: '20px', color: '#C68B59' }} />
+                    <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--px-accent)', textTransform: 'uppercase' }}>Loan Balances ({dashFilterYear})</span>
+                    <Sprite src={spStamp} className="px-card-sprite" />
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px' }}>
                     <div>
-                      <div style={{ fontSize: '10px', fontWeight: 800, color: '#2E7D32' }}>PAID</div>
-                      <div style={{ fontSize: '15px', fontWeight: 800, color: '#2E7D32' }}>₱{yearTotalPaid.toLocaleString()}</div>
+                      <div style={{ fontSize: '10px', fontWeight: 800, color: 'var(--px-green-d)' }}>PAID</div>
+                      <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--px-green-d)' }}>₱{yearTotalPaid.toLocaleString()}</div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: '10px', fontWeight: 800, color: '#C68B59' }}>UNPAID</div>
-                      <div style={{ fontSize: '15px', fontWeight: 800, color: '#C68B59' }}>₱{yearTotalUnpaid.toLocaleString()}</div>
+                      <div style={{ fontSize: '10px', fontWeight: 800, color: 'var(--px-accent)' }}>UNPAID</div>
+                      <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--px-accent)' }}>₱{yearTotalUnpaid.toLocaleString()}</div>
                     </div>
                   </div>
-                  <div style={{ fontSize: '11px', fontWeight: 700, color: '#8C7A6B', marginTop: '4px' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--px-muted)', marginTop: '4px' }}>
                     Total Cost: ₱{yearTotalCost.toLocaleString()}
                   </div>
                 </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px', alignItems: 'stretch' }}>
-                <div style={{ backgroundColor: '#FFF9E6', borderRadius: '32px', padding: '24px', boxShadow: '0 8px 25px rgba(223,177,91,0.15)', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                  <div className="butter-title" style={{ fontSize: '16px', color: '#C68B59', textTransform: 'uppercase', paddingBottom: '8px', borderBottom: '2px dashed #FFEAA7', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ backgroundColor: 'var(--px-card)', borderRadius: 0, '--px': 'panel', padding: '24px', boxShadow: '0 8px 25px rgba(223,177,91,0.15)', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  <div className="kutitap-title" style={{ fontSize: '16px', color: 'var(--px-accent)', textTransform: 'uppercase', paddingBottom: '8px', borderBottom: '2px dashed var(--px-sun)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <LayoutDashboard style={{ width: '18px', height: '18px' }} /> Year-at-a-Glance Summary ({dashFilterYear})
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px', fontWeight: 700 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', backgroundColor: '#FFFFFF', borderRadius: '9999px', boxShadow: '0 4px 12px rgba(223,177,91,0.08)' }}>
-                      <span style={{ color: '#5C3A21' }}>Total Annual Actual Income</span>
-                      <span style={{ color: '#2E7D32' }}>₱{annualActualIncomeSum.toLocaleString()}</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', backgroundColor: '#FFFFFF', borderRadius: 0, '--px': 'pill', boxShadow: '0 4px 12px rgba(223,177,91,0.08)' }}>
+                      <span style={{ color: 'var(--ink)' }}>Total Annual Actual Income</span>
+                      <span style={{ color: 'var(--px-green-d)' }}>₱{annualActualIncomeSum.toLocaleString()}</span>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', backgroundColor: '#FFFFFF', borderRadius: '9999px', boxShadow: '0 4px 12px rgba(223,177,91,0.08)' }}>
-                      <span style={{ color: '#5C3A21' }}>Total Annual Obligations & Expenses</span>
-                      <span style={{ color: '#C68B59' }}>₱{annualDuesSum.toLocaleString()}</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', backgroundColor: '#FFFFFF', borderRadius: 0, '--px': 'pill', boxShadow: '0 4px 12px rgba(223,177,91,0.08)' }}>
+                      <span style={{ color: 'var(--ink)' }}>Total Annual Obligations & Expenses</span>
+                      <span style={{ color: 'var(--px-accent)' }}>₱{annualDuesSum.toLocaleString()}</span>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', backgroundColor: '#FFFFFF', borderRadius: '9999px', boxShadow: '0 4px 12px rgba(223,177,91,0.08)' }}>
-                      <span style={{ color: '#5C3A21' }}>Total Savings Goals Accumulation</span>
-                      <span style={{ color: '#2E7D32' }}>₱{totalSavingsSavedAmount.toLocaleString()} / ₱{totalSavingsGoalsAmount.toLocaleString()}</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', backgroundColor: '#FFFFFF', borderRadius: 0, '--px': 'pill', boxShadow: '0 4px 12px rgba(223,177,91,0.08)' }}>
+                      <span style={{ color: 'var(--ink)' }}>Total Savings Goals Accumulation</span>
+                      <span style={{ color: 'var(--px-green-d)' }}>₱{totalSavingsSavedAmount.toLocaleString()} / ₱{totalSavingsGoalsAmount.toLocaleString()}</span>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', backgroundColor: '#FFFFFF', borderRadius: '9999px', boxShadow: '0 4px 12px rgba(223,177,91,0.08)' }}>
-                      <span style={{ color: '#5C3A21' }}>Remaining Outstanding Loans</span>
-                      <span style={{ color: '#C68B59' }}>₱{yearTotalUnpaid.toLocaleString()}</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', backgroundColor: '#FFFFFF', borderRadius: 0, '--px': 'pill', boxShadow: '0 4px 12px rgba(223,177,91,0.08)' }}>
+                      <span style={{ color: 'var(--ink)' }}>Remaining Outstanding Loans</span>
+                      <span style={{ color: 'var(--px-accent)' }}>₱{yearTotalUnpaid.toLocaleString()}</span>
                     </div>
                   </div>
                 </div>
 
-                <div style={{ background: 'linear-gradient(135deg, #FFF3CD 0%, #FFF9E6 100%)', borderRadius: '32px', padding: '24px', boxShadow: '0 8px 25px rgba(223,177,91,0.15)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', textAlign: 'center' }}>
+                <div style={{ background: 'var(--px-card)', borderRadius: 0, '--px': 'panel', padding: '24px', boxShadow: '0 8px 25px rgba(223,177,91,0.15)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', textAlign: 'center' }}>
                   <div>
-                    <div style={{ fontSize: '11px', fontWeight: 800, color: '#C68B59', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                      <Sparkles style={{ width: '16px', height: '16px' }} /> Daily Butter Motivation
+                    <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--px-accent)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                      <Sparkles style={{ width: '16px', height: '16px' }} /> Finance Motivation
                     </div>
-                    <div style={{ backgroundColor: '#FFFFFF', padding: '18px', borderRadius: '24px', boxShadow: 'inset 0 2px 8px rgba(223,177,91,0.1)', fontSize: '13px', fontWeight: 700, color: '#5C3A21', lineHeight: '1.5' }}>
+                    <div style={{ backgroundColor: '#FFFFFF', padding: '18px', borderRadius: 0, '--px': 'card', boxShadow: 'inset 0 2px 8px rgba(223,177,91,0.1)', fontSize: '13px', fontWeight: 700, color: 'var(--ink)', lineHeight: '1.5' }}>
                       {currentQuote.text}
                     </div>
                   </div>
-
-                  <div style={{ fontSize: '11px', fontWeight: 800, color: '#8C7A6B', marginTop: '12px' }}>
-                    Butter Bear Planner • Stay Cozy
+                  <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--px-muted)', marginTop: '12px' }}>
+                    Kutitap • Stay Cozy
                   </div>
                 </div>
               </div>
@@ -981,66 +1152,33 @@ export default function App() {
             <div style={{ width: '100%', display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
               <div style={{ textAlign: 'center', marginBottom: '16px', position: 'relative', flexShrink: 0 }}>
                 <div style={{ display: 'inline-flex', alignItems: 'center', gap: '14px' }}>
-                  <button
-                    onClick={handlePrevMonth}
-                    style={{ backgroundColor: '#FFFFFF', borderRadius: '9999px', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#C68B59', fontWeight: 800, boxShadow: '0 4px 12px rgba(223,177,91,0.2)' }}
-                  >
+                  <button onClick={handlePrevMonth} style={{ backgroundColor: '#FFFFFF', borderRadius: 0, '--px': 'pill', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--px-accent)', fontWeight: 800, boxShadow: '0 4px 12px rgba(223,177,91,0.2)' }}>
                     <ChevronLeft style={{ width: '16px', height: '16px' }} />
                   </button>
 
-                  <h2
-                    onClick={() => setIsMonthPickerOpen(!isMonthPickerOpen)}
-                    className="butter-title"
-                    style={{ fontSize: '28px', color: '#C68B59', margin: 0, cursor: 'pointer', userSelect: 'none', display: 'flex', alignItems: 'center', gap: '6px' }}
-                  >
+                  <h2 onClick={() => setIsMonthPickerOpen(!isMonthPickerOpen)} className="kutitap-title" style={{ fontSize: '28px', color: 'var(--px-accent)', margin: 0, cursor: 'pointer', userSelect: 'none', display: 'flex', alignItems: 'center', gap: '6px' }}>
                     {months[currentMonthIndex]} <span>{currentYear}</span>
-                    <ChevronDown style={{ width: '16px', height: '16px', color: '#8C7A6B' }} />
+                    <ChevronDown style={{ width: '16px', height: '16px', color: 'var(--px-muted)' }} />
                   </h2>
 
-                  <button
-                    onClick={handleNextMonth}
-                    style={{ backgroundColor: '#FFFFFF', borderRadius: '9999px', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#C68B59', fontWeight: 800, boxShadow: '0 4px 12px rgba(223,177,91,0.2)' }}
-                  >
+                  <button onClick={handleNextMonth} style={{ backgroundColor: '#FFFFFF', borderRadius: 0, '--px': 'pill', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--px-accent)', fontWeight: 800, boxShadow: '0 4px 12px rgba(223,177,91,0.2)' }}>
                     <ChevronRight style={{ width: '16px', height: '16px' }} />
                   </button>
                 </div>
 
                 {isMonthPickerOpen && (
-                  <div style={{ position: 'absolute', top: '55px', left: '50%', transform: 'translateX(-50%)', backgroundColor: '#FFFFFF', borderRadius: '28px', padding: '20px', boxShadow: '0 20px 40px rgba(223,177,91,0.25)', zIndex: 100, width: '320px' }}>
+                  <div style={{ position: 'absolute', top: '55px', left: '50%', transform: 'translateX(-50%)', backgroundColor: '#FFFFFF', borderRadius: 0, '--px': 'panel', padding: '20px', boxShadow: '0 20px 40px rgba(223,177,91,0.25)', zIndex: 100, width: '320px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-                      <span style={{ fontSize: '12px', fontWeight: 800, color: '#C68B59', textTransform: 'uppercase' }}>Select Month & Year</span>
+                      <span style={{ fontSize: '12px', fontWeight: 800, color: 'var(--px-accent)', textTransform: 'uppercase' }}>Select Month & Year</span>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <button
-                          onClick={() => setCurrentYear(Math.max(2024, currentYear - 1))}
-                          style={{ padding: '6px 10px', borderRadius: '9999px', backgroundColor: '#FFF3CD', cursor: 'pointer', fontWeight: 800, color: '#C68B59' }}
-                        >
-                          <ChevronLeft style={{ width: '12px', height: '12px' }} />
-                        </button>
-                        <span style={{ fontWeight: 800, color: '#C68B59', fontSize: '14px' }}>{currentYear}</span>
-                        <button
-                          onClick={() => setCurrentYear(Math.min(2050, currentYear + 1))}
-                          style={{ padding: '6px 10px', borderRadius: '9999px', backgroundColor: '#FFF3CD', cursor: 'pointer', fontWeight: 800, color: '#C68B59' }}
-                        >
-                          <ChevronRight style={{ width: '12px', height: '12px' }} />
-                        </button>
+                        <button onClick={() => setCurrentYear(Math.max(2024, currentYear - 1))} style={{ padding: '6px 10px', borderRadius: 0, '--px': 'pill', backgroundColor: 'var(--px-butter)', cursor: 'pointer', fontWeight: 800, color: 'var(--px-accent)' }}><ChevronLeft style={{ width: '12px', height: '12px' }} /></button>
+                        <span style={{ fontWeight: 800, color: 'var(--px-accent)', fontSize: '14px' }}>{currentYear}</span>
+                        <button onClick={() => setCurrentYear(Math.min(2050, currentYear + 1))} style={{ padding: '6px 10px', borderRadius: 0, '--px': 'pill', backgroundColor: 'var(--px-butter)', cursor: 'pointer', fontWeight: 800, color: 'var(--px-accent)' }}><ChevronRight style={{ width: '12px', height: '12px' }} /></button>
                       </div>
                     </div>
-
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
                       {months.map((m, idx) => (
-                        <button
-                          key={m}
-                          onClick={() => { setCurrentMonthIndex(idx); setIsMonthPickerOpen(false); }}
-                          style={{
-                            padding: '10px 6px',
-                            borderRadius: '9999px',
-                            fontWeight: 800,
-                            fontSize: '12px',
-                            cursor: 'pointer',
-                            backgroundColor: currentMonthIndex === idx ? '#DFB15B' : '#FFF9E6',
-                            color: currentMonthIndex === idx ? '#FFFFFF' : '#5C3A21'
-                          }}
-                        >
+                        <button key={m} onClick={() => { setCurrentMonthIndex(idx); setIsMonthPickerOpen(false); }} style={{ padding: '10px 6px', borderRadius: 0, '--px': 'pill', fontWeight: 800, fontSize: '12px', cursor: 'pointer', backgroundColor: currentMonthIndex === idx ? 'var(--px-pink)' : 'var(--px-card)', color: currentMonthIndex === idx ? '#FFFFFF' : 'var(--ink)' }}>
                           {m.slice(0, 3)}
                         </button>
                       ))}
@@ -1066,115 +1204,92 @@ export default function App() {
               `}</style>
 
               <div className="planner-grid-fullscreen">
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', width: '100%', justifyContent: 'space-between' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                    <div style={{ backgroundColor: '#FFF3CD', borderRadius: '28px', padding: '18px', width: '100%', boxShadow: '0 8px 25px rgba(223,177,91,0.15)' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', width: '100%', height: '100%', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', width: '100%' }}>
+                    <div style={{ backgroundColor: 'var(--px-butter)', borderRadius: 0, '--px': 'panel', padding: '18px', width: '100%', boxShadow: '0 8px 25px rgba(223,177,91,0.15)' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                        <div style={{ fontSize: '13px', fontWeight: 800, color: '#C68B59', textTransform: 'uppercase' }}>Income ({months[currentMonthIndex]} {currentYear})</div>
-                        <span style={{ fontSize: '11px', color: '#8C7A6B', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}><ShieldCheck style={{ width: '14px', height: '14px' }} /> Saved</span>
+                        <div style={{ fontSize: '13px', fontWeight: 800, color: 'var(--px-accent)', textTransform: 'uppercase' }}>Income ({months[currentMonthIndex]} {currentYear})</div>
+                        <span style={{ fontSize: '11px', color: 'var(--px-muted)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}><ShieldCheck style={{ width: '14px', height: '14px' }} /> Saved</span>
                       </div>
-
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                         <div>
-                          <label style={{ fontSize: '12px', fontWeight: 700, color: '#5C3A21', display: 'block', marginBottom: '4px' }}>Expected Income (₱) [Auto-Synced from Attendance]</label>
+                          <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--ink)', display: 'block', marginBottom: '4px' }}>Expected Income (₱) [Auto-Synced]</label>
                           <input
                             type="number"
                             placeholder="e.g. 50000"
-                            value={currentIncome.expected}
+                            value={currentIncome.expected === 0 || currentIncome.expected === '0' ? '' : currentIncome.expected}
                             onChange={(e) => handleIncomeChange('expected', e.target.value)}
-                            style={{ width: '100%', backgroundColor: '#FFFFFF', padding: '10px 14px', borderRadius: '9999px', fontWeight: 800, fontSize: '15px', color: '#5C3A21', textAlign: 'center' }}
+                            style={{ width: '100%', backgroundColor: '#FFFFFF', padding: '10px 14px', borderRadius: 0, '--px': 'pill', fontWeight: 800, fontSize: '15px', color: 'var(--ink)', textAlign: 'center' }}
                           />
                         </div>
-
                         <div>
-                          <label style={{ fontSize: '12px', fontWeight: 700, color: '#2E7D32', display: 'block', marginBottom: '4px' }}>Actual Income (₱)</label>
+                          <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--px-green-d)', display: 'block', marginBottom: '4px' }}>Actual Income (₱)</label>
                           <input
                             type="number"
                             placeholder="e.g. 48500"
-                            value={currentIncome.actual}
+                            value={currentIncome.actual === 0 || currentIncome.actual === '0' ? '' : currentIncome.actual}
                             onChange={(e) => handleIncomeChange('actual', e.target.value)}
-                            style={{ width: '100%', backgroundColor: '#FFFFFF', padding: '10px 14px', borderRadius: '9999px', fontWeight: 800, fontSize: '15px', color: '#2E7D32', textAlign: 'center' }}
+                            style={{ width: '100%', backgroundColor: '#FFFFFF', padding: '10px 14px', borderRadius: 0, '--px': 'pill', fontWeight: 800, fontSize: '15px', color: 'var(--px-green-d)', textAlign: 'center' }}
                           />
                         </div>
-
                         <div>
-                          <label style={{ fontSize: '12px', fontWeight: 700, color: diffNum >= 0 ? '#2E7D32' : '#C68B59', display: 'block', marginBottom: '4px' }}>Difference (₱)</label>
-                          <div style={{ backgroundColor: '#FFFFFF', padding: '10px 14px', borderRadius: '9999px', fontWeight: 800, fontSize: '15px', textAlign: 'center', width: '100%', color: diffNum >= 0 ? '#2E7D32' : '#C68B59' }}>
+                          <label style={{ fontSize: '12px', fontWeight: 700, color: diffNum >= 0 ? 'var(--px-green-d)' : 'var(--px-accent)', display: 'block', marginBottom: '4px' }}>Difference (₱)</label>
+                          <div style={{ backgroundColor: '#FFFFFF', padding: '10px 14px', borderRadius: 0, '--px': 'pill', fontWeight: 800, fontSize: '15px', textAlign: 'center', width: '100%', color: diffNum >= 0 ? 'var(--px-green-d)' : 'var(--px-accent)' }}>
                             {diffNum >= 0 ? `+₱${diffNum.toLocaleString()}` : `-₱${Math.abs(diffNum).toLocaleString()}`}
                           </div>
                         </div>
                       </div>
                     </div>
 
-                    <div style={{ backgroundColor: '#FFF3CD', borderRadius: '28px', padding: '18px', width: '100%', textAlign: 'center', boxShadow: '0 8px 25px rgba(223,177,91,0.15)' }}>
-                      <div style={{ fontSize: '13px', fontWeight: 800, color: '#C68B59', textTransform: 'uppercase', marginBottom: '6px' }}>Monthly Due</div>
-                      <div style={{ fontSize: '11px', fontWeight: 700, color: '#8C7A6B', marginBottom: '8px' }}>Total of Obligations & Expenses</div>
-                      <div style={{ backgroundColor: '#FFFFFF', padding: '12px 14px', borderRadius: '9999px', fontWeight: 800, fontSize: '18px', color: '#C68B59', textAlign: 'center', width: '100%' }}>
+                    <div style={{ backgroundColor: 'var(--px-butter)', borderRadius: 0, '--px': 'panel', padding: '18px', width: '100%', textAlign: 'center', boxShadow: '0 8px 25px rgba(223,177,91,0.15)' }}>
+                      <div style={{ fontSize: '13px', fontWeight: 800, color: 'var(--px-accent)', textTransform: 'uppercase', marginBottom: '6px' }}>Monthly Due</div>
+                      <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--px-muted)', marginBottom: '8px' }}>Total of Obligations & Expenses</div>
+                      <div style={{ backgroundColor: '#FFFFFF', padding: '12px 14px', borderRadius: 0, '--px': 'pill', fontWeight: 800, fontSize: '18px', color: 'var(--px-accent)', textAlign: 'center', width: '100%' }}>
                         ₱{monthlyDueTotal.toLocaleString()}
                       </div>
                     </div>
-
-                    <div style={{ backgroundColor: '#FFF3CD', borderRadius: '28px', padding: '18px', width: '100%', textAlign: 'center', boxShadow: '0 8px 25px rgba(223,177,91,0.15)' }}>
-                      <div style={{ fontSize: '13px', fontWeight: 800, color: '#C68B59', textTransform: 'uppercase', marginBottom: '6px' }}>Remaining Balance</div>
-                      <div style={{ fontSize: '11px', fontWeight: 700, color: '#8C7A6B', marginBottom: '8px' }}>Actual Income minus Due</div>
-                      <div style={{ backgroundColor: '#FFFFFF', padding: '12px 14px', borderRadius: '9999px', fontWeight: 800, fontSize: '18px', textAlign: 'center', width: '100%', color: remainingBudget >= 0 ? '#2E7D32' : '#C68B59' }}>
+                    <div style={{ backgroundColor: 'var(--px-butter)', borderRadius: 0, '--px': 'panel', padding: '18px', width: '100%', textAlign: 'center', boxShadow: '0 8px 25px rgba(223,177,91,0.15)' }}>
+                      <div style={{ fontSize: '13px', fontWeight: 800, color: 'var(--px-accent)', textTransform: 'uppercase', marginBottom: '6px' }}>Remaining Balance</div>
+                      <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--px-muted)', marginBottom: '8px' }}>Actual Income minus Due</div>
+                      <div style={{ backgroundColor: '#FFFFFF', padding: '12px 14px', borderRadius: 0, '--px': 'pill', fontWeight: 800, fontSize: '18px', textAlign: 'center', width: '100%', color: remainingBudget >= 0 ? 'var(--px-green-d)' : 'var(--px-accent)' }}>
                         {remainingBudget >= 0 ? `₱${remainingBudget.toLocaleString()}` : `-₱${Math.abs(remainingBudget).toLocaleString()}`}
                       </div>
                     </div>
                   </div>
-
-                  <div style={{ background: 'linear-gradient(135deg, #FFF9E6 0%, #FFF3CD 100%)', borderRadius: '28px', padding: '18px', textAlign: 'center', boxShadow: '0 8px 25px rgba(223,177,91,0.15)', width: '100%' }}>
-                    <div style={{ fontSize: '11px', fontWeight: 800, color: '#C68B59', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                  <div style={{ background: 'var(--px-card)', borderRadius: 0, '--px': 'panel', padding: '18px', textAlign: 'center', boxShadow: '0 8px 25px rgba(223,177,91,0.15)', width: '100%', flexShrink: 0 }}>
+                    <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--px-accent)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                       <Sparkles style={{ width: '14px', height: '14px' }} /> Sweet Note for {months[currentMonthIndex]}
                     </div>
-                    <div style={{ backgroundColor: '#FFFFFF', padding: '14px', borderRadius: '20px', fontSize: '13px', fontWeight: 700, color: '#5C3A21', lineHeight: '1.4' }}>
+                    <div style={{ backgroundColor: '#FFFFFF', padding: '14px', borderRadius: 0, '--px': 'card', fontSize: '13px', fontWeight: 700, color: 'var(--ink)', lineHeight: '1.4' }}>
                       {currentQuote.text}
                     </div>
                   </div>
                 </div>
 
-                {/* MONTHLY OBLIGATIONS */}
-                <div style={{ backgroundColor: '#FFF9E6', borderRadius: '28px', padding: '20px', width: '100%', display: 'flex', flexDirection: 'column', height: '100%', maxHeight: 'calc(100vh - 150px)', boxShadow: '0 8px 25px rgba(223,177,91,0.15)' }}>
+                <div style={{ backgroundColor: 'var(--px-card)', borderRadius: 0, '--px': 'panel', padding: '20px', width: '100%', display: 'flex', flexDirection: 'column', height: '100%', maxHeight: 'calc(100vh - 100px)', boxShadow: '0 8px 25px rgba(223,177,91,0.15)' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-                    <div style={{ marginBottom: '12px', borderBottom: '2px dashed #FFEAA7', paddingBottom: '8px', flexShrink: 0 }}>
-                      <span style={{ fontSize: '15px', fontWeight: 800, color: '#C68B59', textTransform: 'uppercase' }}>Monthly Obligations</span>
+                    <div style={{ marginBottom: '12px', borderBottom: '2px dashed var(--px-sun)', paddingBottom: '8px', flexShrink: 0 }}>
+                      <span style={{ fontSize: '15px', fontWeight: 800, color: 'var(--px-accent)', textTransform: 'uppercase' }}>Monthly Obligations</span>
                     </div>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.1fr 0.9fr', fontSize: '12px', fontWeight: 800, color: '#C68B59', marginBottom: '8px', padding: '0 4px', flexShrink: 0 }}>
-                      <span>Category</span>
-                      <span style={{ textAlign: 'center' }}>Amount</span>
-                      <span style={{ textAlign: 'center' }}>Status</span>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.1fr 0.9fr', fontSize: '12px', fontWeight: 800, color: 'var(--px-accent)', marginBottom: '8px', padding: '0 4px', flexShrink: 0 }}>
+                      <span>Category</span><span style={{ textAlign: 'center' }}>Amount</span><span style={{ textAlign: 'center' }}>Status</span>
                     </div>
-
                     <div style={{ overflowY: 'auto', flex: 1, paddingRight: '4px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      <div style={{ fontSize: '12px', fontWeight: 800, color: '#5C3A21', textTransform: 'uppercase', margin: '4px 0', padding: '0 4px', letterSpacing: '0.5px' }}>
-                        Utility Bills
-                      </div>
-
+                      <div style={{ fontSize: '12px', fontWeight: 800, color: 'var(--ink)', textTransform: 'uppercase', margin: '4px 0', padding: '0 4px', letterSpacing: '0.5px' }}>Utility Bills</div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
                         {Object.entries(currentUtilityBills).map(([billName, data]) => (
-                          <div key={billName} style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.1fr 0.9fr', alignItems: 'center', backgroundColor: '#FFFFFF', padding: '10px 12px', borderRadius: '9999px', fontSize: '13px', width: '100%', gap: '6px', boxShadow: '0 2px 10px rgba(223,177,91,0.08)' }}>
-                            <span style={{ fontWeight: 700, color: '#5C3A21', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '13px', paddingLeft: '6px' }}>{billName}</span>
+                          <div key={billName} style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.1fr 0.9fr', alignItems: 'center', backgroundColor: '#FFFFFF', padding: '10px 12px', borderRadius: 0, '--px': 'pill', fontSize: '13px', width: '100%', gap: '6px', boxShadow: '0 2px 10px rgba(223,177,91,0.08)' }}>
+                            <span style={{ fontWeight: 700, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '13px', paddingLeft: '6px' }}>{billName}</span>
                             <input
                               type="number"
                               placeholder="0"
-                              value={data.amount}
+                              value={data.amount === 0 || data.amount === '0' ? '' : data.amount}
                               onChange={(e) => handleUtilityAmountChange(billName, e.target.value)}
-                              style={{ width: '100%', backgroundColor: '#FFFBEA', padding: '6px 8px', borderRadius: '9999px', fontWeight: 700, fontSize: '13px', color: '#5C3A21', textAlign: 'center' }}
+                              style={{ width: '100%', backgroundColor: 'var(--px-paper)', padding: '6px 8px', borderRadius: 0, '--px': 'pill', fontWeight: 700, fontSize: '13px', color: 'var(--ink)', textAlign: 'center' }}
                             />
                             <button
                               onClick={() => handleUtilityTogglePaid(billName)}
-                              style={{
-                                padding: '6px 10px',
-                                borderRadius: '9999px',
-                                fontWeight: 800,
-                                fontSize: '11px',
-                                cursor: 'pointer',
-                                textAlign: 'center',
-                                width: '100%',
-                                backgroundColor: data.paid ? '#C8E6C9' : '#FFF3CD',
-                                color: data.paid ? '#2E7D32' : '#C68B59'
-                              }}
+                              style={{ padding: '6px 10px', borderRadius: 0, '--px': 'pill', fontWeight: 800, fontSize: '11px', cursor: 'pointer', textAlign: 'center', width: '100%', backgroundColor: data.paid ? 'var(--px-mint)' : 'var(--px-butter)', color: data.paid ? 'var(--px-green-d)' : 'var(--px-accent)' }}
                             >
                               {data.paid ? 'Paid' : 'Not Paid'}
                             </button>
@@ -1183,39 +1298,45 @@ export default function App() {
                       </div>
 
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '14px 0 6px 0', padding: '0 4px' }}>
-                        <div style={{ fontSize: '12px', fontWeight: 800, color: '#5C3A21', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                          Loans Cutoffs (Consolidated)
-                        </div>
-                        <span style={{ fontSize: '10px', fontWeight: 800, backgroundColor: '#FFF3CD', color: '#C68B59', padding: '2px 10px', borderRadius: '9999px' }}>Auto-Synced</span>
+                        <div style={{ fontSize: '12px', fontWeight: 800, color: 'var(--ink)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Loans Cutoffs</div>
+                        <span style={{ fontSize: '10px', fontWeight: 800, backgroundColor: 'var(--px-butter)', color: 'var(--px-accent)', padding: '2px 10px', borderRadius: 0, '--px': 'pill' }}>Auto-Synced</span>
                       </div>
-
-                      {consolidatedLoanItems.length === 0 ? (
-                        <div style={{ fontSize: '12px', color: '#8C7A6B', fontStyle: 'italic', padding: '4px' }}>
-                          No loans due this month
-                        </div>
+                      {totalConsolidatedLoansAmt === 0 ? (
+                        <div style={{ fontSize: '12px', color: 'var(--px-muted)', fontStyle: 'italic', padding: '4px' }}>No loans due this month</div>
                       ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
-                          {consolidatedLoanItems.map((item) => (
-                            <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.1fr 0.9fr', alignItems: 'center', backgroundColor: '#FFFFFF', padding: '10px 12px', borderRadius: '9999px', fontSize: '13px', width: '100%', gap: '6px', boxShadow: '0 2px 10px rgba(223,177,91,0.08)' }}>
-                              <span style={{ fontWeight: 700, color: '#5C3A21', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '13px', paddingLeft: '6px' }} title={item.name}>
-                                {item.name}
-                              </span>
-                              <div style={{ width: '100%', backgroundColor: '#FFFBEA', padding: '6px 8px', borderRadius: '9999px', fontWeight: 700, fontSize: '13px', color: '#666', textAlign: 'center' }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.1fr 0.9fr', alignItems: 'center', backgroundColor: '#FFFFFF', padding: '10px 12px', borderRadius: 0, '--px': 'pill', fontSize: '13px', width: '100%', gap: '6px', boxShadow: '0 2px 10px rgba(223,177,91,0.08)' }}>
+                            <span style={{ fontWeight: 700, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '13px', paddingLeft: '6px' }} title={`Loans (${currentMonthName} Consolidated)`}>Loans Cutoffs</span>
+                            <div style={{ width: '100%', backgroundColor: 'var(--px-paper)', padding: '6px 8px', borderRadius: 0, '--px': 'pill', fontWeight: 700, fontSize: '13px', color: 'var(--px-muted)', textAlign: 'center' }}>
+                              ₱{parseFloat(totalConsolidatedLoansAmt || 0).toLocaleString()}
+                            </div>
+                            <button
+                              onClick={() => { ['15th', '30th'].forEach(cKey => handleToggleCutoffPaidGlobal(currentYear, currentMonthName, cKey)); }}
+                              style={{ padding: '6px 10px', borderRadius: 0, '--px': 'pill', fontWeight: 800, fontSize: '11px', cursor: 'pointer', textAlign: 'center', width: '100%', backgroundColor: isConsolidatedLoansPaid ? 'var(--px-mint)' : 'var(--px-butter)', color: isConsolidatedLoansPaid ? 'var(--px-green-d)' : 'var(--px-accent)' }}
+                            >
+                              {isConsolidatedLoansPaid ? 'Paid' : 'Not Paid'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '14px 0 6px 0', padding: '0 4px' }}>
+                        <div style={{ fontSize: '12px', fontWeight: 800, color: 'var(--ink)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Savings</div>
+                        <span style={{ fontSize: '10px', fontWeight: 800, backgroundColor: 'var(--px-butter)', color: 'var(--px-accent)', padding: '2px 10px', borderRadius: 0, '--px': 'pill' }}>Auto-Synced</span>
+                      </div>
+                      {currentMonthSavingsItems.length === 0 ? (
+                        <div style={{ fontSize: '12px', color: 'var(--px-muted)', fontStyle: 'italic', padding: '4px' }}>No savings goals due this month</div>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
+                          {currentMonthSavingsItems.map((item) => (
+                            <div key={item.goalId} style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.1fr 0.9fr', alignItems: 'center', backgroundColor: '#FFFFFF', padding: '10px 12px', borderRadius: 0, '--px': 'pill', fontSize: '13px', width: '100%', gap: '6px', boxShadow: '0 2px 10px rgba(223,177,91,0.08)' }}>
+                              <span style={{ fontWeight: 700, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '13px', paddingLeft: '6px' }} title={item.name}>{item.name}</span>
+                              <div style={{ width: '100%', backgroundColor: 'var(--px-paper)', padding: '6px 8px', borderRadius: 0, '--px': 'pill', fontWeight: 700, fontSize: '13px', color: 'var(--px-muted)', textAlign: 'center' }}>
                                 ₱{parseFloat(item.amount || 0).toLocaleString()}
                               </div>
                               <button
-                                onClick={() => handleToggleCutoffPaidGlobal(currentYear, currentMonthName, item.cutoffKey)}
-                                style={{
-                                  padding: '6px 10px',
-                                  borderRadius: '9999px',
-                                  fontWeight: 800,
-                                  fontSize: '11px',
-                                  cursor: 'pointer',
-                                  textAlign: 'center',
-                                  width: '100%',
-                                  backgroundColor: item.paid ? '#C8E6C9' : '#FFF3CD',
-                                  color: item.paid ? '#2E7D32' : '#C68B59'
-                                }}
+                                onClick={() => handleGoalMonthTogglePaid(item.goalId, currentKey)}
+                                style={{ padding: '6px 10px', borderRadius: 0, '--px': 'pill', fontWeight: 800, fontSize: '11px', cursor: 'pointer', textAlign: 'center', width: '100%', backgroundColor: item.paid ? 'var(--px-mint)' : 'var(--px-butter)', color: item.paid ? 'var(--px-green-d)' : 'var(--px-accent)' }}
                               >
                                 {item.paid ? 'Paid' : 'Not Paid'}
                               </button>
@@ -1225,81 +1346,55 @@ export default function App() {
                       )}
                     </div>
                   </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.1fr 0.9fr', padding: '12px 14px', backgroundColor: '#FFEAA7', borderRadius: '9999px', fontSize: '12px', fontWeight: 800, color: '#5C3A21', marginTop: '12px', width: '100%', gap: '6px', flexShrink: 0, boxShadow: '0 4px 12px rgba(223,177,91,0.2)' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.1fr 0.9fr', padding: '12px 14px', backgroundColor: 'var(--px-sun)', borderRadius: 0, '--px': 'pill', fontSize: '12px', fontWeight: 800, color: 'var(--ink)', marginTop: '12px', width: '100%', gap: '6px', flexShrink: 0, boxShadow: '0 4px 12px rgba(223,177,91,0.2)' }}>
                     <span style={{ paddingLeft: '6px' }}>TOTAL</span>
                     <span style={{ textAlign: 'center' }}>₱{obligationTotal.toLocaleString()}</span>
                     <span style={{ textAlign: 'center' }}>{obligationPaidPct}%</span>
                   </div>
                 </div>
 
-                {/* MONTHLY EXPENSES */}
-                <div style={{ backgroundColor: '#FFF9E6', borderRadius: '28px', padding: '20px', width: '100%', display: 'flex', flexDirection: 'column', height: '100%', maxHeight: 'calc(100vh - 150px)', boxShadow: '0 8px 25px rgba(223,177,91,0.15)' }}>
+                <div style={{ backgroundColor: 'var(--px-card)', borderRadius: 0, '--px': 'panel', padding: '20px', width: '100%', display: 'flex', flexDirection: 'column', height: '100%', maxHeight: 'calc(100vh - 100px)', boxShadow: '0 8px 25px rgba(223,177,91,0.15)' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', borderBottom: '2px dashed #FFEAA7', paddingBottom: '8px', flexShrink: 0 }}>
-                      <span style={{ fontSize: '15px', fontWeight: 800, color: '#C68B59', textTransform: 'uppercase' }}>Monthly Expenses</span>
-                      <button
-                        onClick={handleAddExpense}
-                        style={{ backgroundColor: '#DFB15B', color: '#FFFFFF', borderRadius: '9999px', padding: '6px 14px', fontWeight: 800, fontSize: '11px', cursor: 'pointer', boxShadow: '0 4px 12px rgba(223,177,91,0.3)', display: 'flex', alignItems: 'center', gap: '4px' }}
-                      >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', borderBottom: '2px dashed var(--px-sun)', paddingBottom: '8px', flexShrink: 0 }}>
+                      <span style={{ fontSize: '15px', fontWeight: 800, color: 'var(--px-accent)', textTransform: 'uppercase' }}>Monthly Expenses</span>
+                      <button onClick={handleAddExpense} style={{ backgroundColor: 'var(--px-pink)', color: '#FFFFFF', borderRadius: 0, '--px': 'pill', padding: '6px 14px', fontWeight: 800, fontSize: '11px', cursor: 'pointer', boxShadow: '0 4px 12px rgba(223,177,91,0.3)', display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <Plus style={{ width: '14px', height: '14px' }} /> Add Expense
                       </button>
                     </div>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 0.8fr 32px', fontSize: '12px', fontWeight: 800, color: '#C68B59', marginBottom: '8px', padding: '0 4px', flexShrink: 0 }}>
-                      <span>Category</span>
-                      <span style={{ textAlign: 'center' }}>Amount</span>
-                      <span style={{ textAlign: 'center' }}>Status</span>
-                      <span></span>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 0.8fr 32px', fontSize: '12px', fontWeight: 800, color: 'var(--px-accent)', marginBottom: '8px', padding: '0 4px', flexShrink: 0 }}>
+                      <span>Category</span><span style={{ textAlign: 'center' }}>Amount</span><span style={{ textAlign: 'center' }}>Status</span><span></span>
                     </div>
-
                     <div style={{ overflowY: 'auto', flex: 1, paddingRight: '4px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       {currentExpenses.length === 0 ? (
-                        <div style={{ textAlign: 'center', padding: '32px 8px', fontSize: '12px', color: '#8C7A6B', fontWeight: 700, fontStyle: 'italic' }}>
+                        <div style={{ textAlign: 'center', padding: '32px 8px', fontSize: '12px', color: 'var(--px-muted)', fontWeight: 700, fontStyle: 'italic' }}>
                           No expenses added yet. Click "+ Add Expense" above!
                         </div>
                       ) : (
                         currentExpenses.map((item) => (
-                          <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 0.8fr 32px', alignItems: 'center', backgroundColor: '#FFFFFF', padding: '10px 12px', borderRadius: '9999px', fontSize: '13px', width: '100%', gap: '6px', boxShadow: '0 2px 10px rgba(223,177,91,0.08)' }}>
+                          <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 0.8fr 32px', alignItems: 'center', backgroundColor: '#FFFFFF', padding: '10px 12px', borderRadius: 0, '--px': 'pill', fontSize: '13px', width: '100%', gap: '6px', boxShadow: '0 2px 10px rgba(223,177,91,0.08)' }}>
                             <input
                               type="text"
                               placeholder="Category"
                               value={item.category}
                               onChange={(e) => handleExpenseChange(item.id, 'category', e.target.value)}
-                              style={{ width: '100%', backgroundColor: '#FFFBEA', padding: '6px 8px', borderRadius: '9999px', fontWeight: 700, fontSize: '13px', color: '#5C3A21', paddingLeft: '8px' }}
+                              style={{ width: '100%', backgroundColor: 'var(--px-paper)', padding: '6px 8px', borderRadius: 0, '--px': 'pill', fontWeight: 700, fontSize: '13px', color: 'var(--ink)', paddingLeft: '8px' }}
                             />
                             <input
                               type="number"
                               placeholder="0"
-                              value={item.amount}
+                              value={item.amount === 0 || item.amount === '0' ? '' : item.amount}
                               onChange={(e) => handleExpenseChange(item.id, 'amount', e.target.value)}
-                              style={{ width: '100%', backgroundColor: '#FFFBEA', padding: '6px 8px', borderRadius: '9999px', fontWeight: 700, fontSize: '13px', color: '#5C3A21', textAlign: 'center' }}
+                              style={{ width: '100%', backgroundColor: 'var(--px-paper)', padding: '6px 8px', borderRadius: 0, '--px': 'pill', fontWeight: 700, fontSize: '13px', color: 'var(--ink)', textAlign: 'center' }}
                             />
                             {item.category.trim() !== '' || item.amount !== '' ? (
                               <button
                                 onClick={() => handleExpenseTogglePaid(item.id)}
-                                style={{
-                                  padding: '6px 4px',
-                                  borderRadius: '9999px',
-                                  fontWeight: 800,
-                                  fontSize: '10px',
-                                  cursor: 'pointer',
-                                  textAlign: 'center',
-                                  width: '100%',
-                                  backgroundColor: item.paid ? '#C8E6C9' : '#FFF3CD',
-                                  color: item.paid ? '#2E7D32' : '#C68B59'
-                                }}
+                                style={{ padding: '6px 4px', borderRadius: 0, '--px': 'pill', fontWeight: 800, fontSize: '10px', cursor: 'pointer', textAlign: 'center', width: '100%', backgroundColor: item.paid ? 'var(--px-mint)' : 'var(--px-butter)', color: item.paid ? 'var(--px-green-d)' : 'var(--px-accent)' }}
                               >
                                 {item.paid ? 'Paid' : 'Not Paid'}
                               </button>
-                            ) : (
-                              <div />
-                            )}
-                            <button
-                              onClick={() => handleDeleteExpense(item.id)}
-                              title="Delete Expense"
-                              style={{ backgroundColor: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px', color: '#C68B59' }}
-                            >
+                            ) : (<div />)}
+                            <button onClick={() => handleDeleteExpense(item.id)} title="Delete Expense" style={{ backgroundColor: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px', color: 'var(--px-accent)' }}>
                               <Trash2 style={{ width: '14px', height: '14px' }} />
                             </button>
                           </div>
@@ -1307,8 +1402,7 @@ export default function App() {
                       )}
                     </div>
                   </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 0.8fr 32px', padding: '12px 14px', backgroundColor: '#FFEAA7', borderRadius: '9999px', fontSize: '12px', fontWeight: 800, color: '#5C3A21', marginTop: '12px', width: '100%', gap: '6px', flexShrink: 0, boxShadow: '0 4px 12px rgba(223,177,91,0.2)' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 0.8fr 32px', padding: '12px 14px', backgroundColor: 'var(--px-sun)', borderRadius: 0, '--px': 'pill', fontSize: '12px', fontWeight: 800, color: 'var(--ink)', marginTop: '12px', width: '100%', gap: '6px', flexShrink: 0, boxShadow: '0 4px 12px rgba(223,177,91,0.2)' }}>
                     <span style={{ paddingLeft: '6px' }}>TOTAL</span>
                     <span style={{ textAlign: 'center' }}>₱{expenseTotal.toLocaleString()}</span>
                     <span style={{ textAlign: 'center' }}>{expensePaidPct}%</span>
@@ -1322,130 +1416,103 @@ export default function App() {
           {/* SAVINGS TAB */}
           {activeTab === 'savings' && (
             <div style={{ width: '100%', display: 'flex', flexDirection: 'column', minHeight: '100%', gap: '20px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', backgroundColor: '#FFF9E6', padding: '24px 28px', borderRadius: '32px', boxShadow: '0 10px 30px rgba(223,177,91,0.18)' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', backgroundColor: 'var(--px-card)', padding: '24px 28px', borderRadius: 0, '--px': 'panel', boxShadow: '0 10px 30px rgba(223,177,91,0.18)', flexShrink: 0 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px' }}>
                   <div>
-                    <h2 className="butter-title" style={{ fontSize: '24px', color: '#C68B59', margin: '0 0 4px 0' }}>Savings Goals Honey Pot 🍯</h2>
-                    <p style={{ fontSize: '13px', fontWeight: 700, color: '#8C7A6B', margin: 0 }}>Create goals, track progress, and auto-sync monthly contributions!</p>
+                    <h2 className="kutitap-title" style={{ fontSize: '24px', color: 'var(--px-accent)', margin: '0 0 4px 0', display: 'flex', alignItems: 'center', gap: '10px' }}><Sprite src={spPudding} className="px-logo-sprite" /> Honey Pot</h2>
+                    <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--px-muted)', margin: 0 }}>Create goals, track progress, and auto-sync monthly contributions with dynamic redistribution!</p>
                   </div>
-                  <button
-                    onClick={() => setIsAddGoalModalOpen(true)}
-                    style={{ backgroundColor: '#DFB15B', color: '#FFFFFF', borderRadius: '9999px', padding: '12px 22px', fontWeight: 800, fontSize: '14px', cursor: 'pointer', boxShadow: '0 6px 20px rgba(223,177,91,0.35)', display: 'flex', alignItems: 'center', gap: '8px' }}
-                  >
+                  <button onClick={() => setIsAddGoalModalOpen(true)} style={{ backgroundColor: 'var(--px-pink)', color: '#FFFFFF', borderRadius: 0, '--px': 'pill', padding: '12px 22px', fontWeight: 800, fontSize: '14px', cursor: 'pointer', boxShadow: '0 6px 20px rgba(223,177,91,0.35)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Plus style={{ width: '16px', height: '16px' }} /> Add New Savings Goal
                   </button>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '14px', marginTop: '4px' }}>
-                  <div style={{ backgroundColor: '#FFFFFF', padding: '16px 20px', borderRadius: '24px', textAlign: 'center', boxShadow: '0 4px 15px rgba(223,177,91,0.1)' }}>
-                    <div style={{ fontSize: '11px', fontWeight: 800, color: '#C68B59', textTransform: 'uppercase', marginBottom: '4px' }}>Total Savings Goal</div>
-                    <div style={{ fontSize: '18px', fontWeight: 800, color: '#5C3A21' }}>₱{totalSavingsGoalsAmount.toLocaleString()}</div>
+                  <div style={{ backgroundColor: '#FFFFFF', padding: '16px 20px', borderRadius: 0, '--px': 'card', textAlign: 'center', boxShadow: '0 4px 15px rgba(223,177,91,0.1)' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--px-accent)', textTransform: 'uppercase', marginBottom: '4px' }}>Total Savings Goal</div>
+                    <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--ink)' }}>₱{totalSavingsGoalsAmount.toLocaleString()}</div>
                   </div>
-
-                  <div style={{ backgroundColor: '#FFFFFF', padding: '16px 20px', borderRadius: '24px', textAlign: 'center', boxShadow: '0 4px 15px rgba(200,230,201,0.2)' }}>
-                    <div style={{ fontSize: '11px', fontWeight: 800, color: '#2E7D32', textTransform: 'uppercase', marginBottom: '4px' }}>Total Saved Amount</div>
-                    <div style={{ fontSize: '18px', fontWeight: 800, color: '#2E7D32' }}>₱{totalSavingsSavedAmount.toLocaleString()} ({overallSavingsProgressPct}%)</div>
+                  <div style={{ backgroundColor: '#FFFFFF', padding: '16px 20px', borderRadius: 0, '--px': 'card', textAlign: 'center', boxShadow: '0 4px 15px rgba(200,230,201,0.2)' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--px-green-d)', textTransform: 'uppercase', marginBottom: '4px' }}>Total Saved Amount</div>
+                    <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--px-green-d)' }}>₱{totalSavingsSavedAmount.toLocaleString()} ({overallSavingsProgressPct}%)</div>
                   </div>
-
-                  <div style={{ backgroundColor: '#FFFFFF', padding: '16px 20px', borderRadius: '24px', textAlign: 'center', boxShadow: '0 4px 15px rgba(223,177,91,0.1)' }}>
-                    <div style={{ fontSize: '11px', fontWeight: 800, color: '#C68B59', textTransform: 'uppercase', marginBottom: '4px' }}>Total Amount Left</div>
-                    <div style={{ fontSize: '18px', fontWeight: 800, color: '#C68B59' }}>₱{totalSavingsAmountLeft.toLocaleString()}</div>
+                  <div style={{ backgroundColor: '#FFFFFF', padding: '16px 20px', borderRadius: 0, '--px': 'card', textAlign: 'center', boxShadow: '0 4px 15px rgba(223,177,91,0.1)' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--px-accent)', textTransform: 'uppercase', marginBottom: '4px' }}>Total Amount Left</div>
+                    <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--px-accent)' }}>₱{totalSavingsAmountLeft.toLocaleString()}</div>
                   </div>
-
-                  <div style={{ backgroundColor: '#FFFFFF', padding: '16px 20px', borderRadius: '24px', textAlign: 'center', boxShadow: '0 4px 15px rgba(223,177,91,0.1)' }}>
-                    <div style={{ fontSize: '11px', fontWeight: 800, color: '#5C3A21', textTransform: 'uppercase', marginBottom: '4px' }}>Active Goals</div>
-                    <div style={{ fontSize: '18px', fontWeight: 800, color: '#5C3A21' }}>{activeSavingsCount}</div>
+                  <div style={{ backgroundColor: '#FFFFFF', padding: '16px 20px', borderRadius: 0, '--px': 'card', textAlign: 'center', boxShadow: '0 4px 15px rgba(223,177,91,0.1)' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--ink)', textTransform: 'uppercase', marginBottom: '4px' }}>Active Goals</div>
+                    <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--ink)' }}>{activeSavingsCount}</div>
                   </div>
                 </div>
               </div>
 
               {isAddGoalModalOpen && (
                 <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(92,58,33,0.3)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-                  <div style={{ backgroundColor: '#FFF9E6', borderRadius: '32px', padding: '24px 30px', width: '100%', maxWidth: '520px', boxShadow: '0 25px 50px rgba(223,177,91,0.3)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px dashed #FFEAA7', paddingBottom: '12px' }}>
-                      <div className="butter-title" style={{ fontSize: '18px', color: '#C68B59' }}>Add New Savings Goal</div>
-                      <button onClick={() => setIsAddGoalModalOpen(false)} style={{ backgroundColor: '#FFF3CD', borderRadius: '9999px', width: '34px', height: '34px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#C68B59', fontWeight: 800 }}>
-                        <X style={{ width: '16px', height: '16px' }} />
-                      </button>
+                  <div style={{ backgroundColor: 'var(--px-card)', borderRadius: 0, '--px': 'panel', padding: '24px 30px', width: '100%', maxWidth: '520px', boxShadow: '0 25px 50px rgba(223,177,91,0.3)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px dashed var(--px-sun)', paddingBottom: '12px' }}>
+                      <div className="kutitap-title" style={{ fontSize: '18px', color: 'var(--px-accent)' }}>Add New Savings Goal</div>
+                      <button onClick={() => setIsAddGoalModalOpen(false)} style={{ backgroundColor: 'var(--px-butter)', borderRadius: 0, '--px': 'pill', width: '34px', height: '34px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--px-accent)', fontWeight: 800 }}><X style={{ width: '16px', height: '16px' }} /></button>
                     </div>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                       <div>
-                        <label style={{ fontSize: '12px', fontWeight: 800, color: '#5C3A21', display: 'block', marginBottom: '4px' }}>Savings Goal Name</label>
+                        <label style={{ fontSize: '12px', fontWeight: 800, color: 'var(--ink)', display: 'block', marginBottom: '4px' }}>Savings Goal Name</label>
                         <input
                           type="text"
                           placeholder="e.g. New Laptop or Honey Fund"
                           value={newGoalName}
                           onChange={(e) => setNewGoalName(e.target.value)}
-                          style={{ width: '100%', backgroundColor: '#FFFFFF', padding: '12px 16px', borderRadius: '9999px', fontWeight: 700, fontSize: '13px', color: '#5C3A21' }}
+                          style={{ width: '100%', backgroundColor: '#FFFFFF', padding: '12px 16px', borderRadius: 0, '--px': 'pill', fontWeight: 700, fontSize: '13px', color: 'var(--ink)' }}
                         />
                       </div>
-
                       <div>
-                        <label style={{ fontSize: '12px', fontWeight: 800, color: '#5C3A21', display: 'block', marginBottom: '4px' }}>Goal Amount (₱)</label>
+                        <label style={{ fontSize: '12px', fontWeight: 800, color: 'var(--ink)', display: 'block', marginBottom: '4px' }}>Goal Amount (₱)</label>
                         <input
                           type="number"
                           placeholder="e.g. 45000"
                           value={newGoalAmount}
                           onChange={(e) => setNewGoalAmount(e.target.value)}
-                          style={{ width: '100%', backgroundColor: '#FFFFFF', padding: '12px 16px', borderRadius: '9999px', fontWeight: 700, fontSize: '13px', color: '#5C3A21' }}
+                          style={{ width: '100%', backgroundColor: '#FFFFFF', padding: '12px 16px', borderRadius: 0, '--px': 'pill', fontWeight: 700, fontSize: '13px', color: 'var(--ink)' }}
                         />
                       </div>
-
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                         <div>
-                          <label style={{ fontSize: '12px', fontWeight: 800, color: '#5C3A21', display: 'block', marginBottom: '4px' }}>Start Date</label>
+                          <label style={{ fontSize: '12px', fontWeight: 800, color: 'var(--ink)', display: 'block', marginBottom: '4px' }}>Start Date</label>
                           <div style={{ display: 'flex', gap: '6px' }}>
-                            <select
-                              value={newStartMonthIndex}
-                              onChange={(e) => setNewStartMonthIndex(parseInt(e.target.value))}
-                              style={{ flex: 1, backgroundColor: '#FFFFFF', padding: '10px', borderRadius: '9999px', fontWeight: 700, fontSize: '12px', color: '#5C3A21', cursor: 'pointer' }}
-                            >
+                            <select value={newStartMonthIndex} onChange={(e) => setNewStartMonthIndex(parseInt(e.target.value))} style={{ flex: 1, backgroundColor: '#FFFFFF', padding: '10px', borderRadius: 0, '--px': 'pill', fontWeight: 700, fontSize: '12px', color: 'var(--ink)', cursor: 'pointer' }}>
                               {months.map((m, idx) => (<option key={m} value={idx}>{m}</option>))}
                             </select>
-                            <select
-                              value={newStartYear}
-                              onChange={(e) => setNewStartYear(parseInt(e.target.value))}
-                              style={{ width: '80px', backgroundColor: '#FFFFFF', padding: '10px', borderRadius: '9999px', fontWeight: 700, fontSize: '12px', color: '#5C3A21', cursor: 'pointer' }}
-                            >
+                            <select value={newStartYear} onChange={(e) => setNewStartYear(parseInt(e.target.value))} style={{ width: '80px', backgroundColor: '#FFFFFF', padding: '10px', borderRadius: 0, '--px': 'pill', fontWeight: 700, fontSize: '12px', color: 'var(--ink)', cursor: 'pointer' }}>
                               {availableYears.map(y => (<option key={y} value={y}>{y}</option>))}
                             </select>
                           </div>
                         </div>
-
                         <div>
-                          <label style={{ fontSize: '12px', fontWeight: 800, color: '#5C3A21', display: 'block', marginBottom: '4px' }}>End Date</label>
+                          <label style={{ fontSize: '12px', fontWeight: 800, color: 'var(--ink)', display: 'block', marginBottom: '4px' }}>End Date</label>
                           <div style={{ display: 'flex', gap: '6px' }}>
-                            <select
-                              value={newEndMonthIndex}
-                              onChange={(e) => setNewEndMonthIndex(parseInt(e.target.value))}
-                              style={{ flex: 1, backgroundColor: '#FFFFFF', padding: '10px', borderRadius: '9999px', fontWeight: 700, fontSize: '12px', color: '#5C3A21', cursor: 'pointer' }}
-                            >
+                            <select value={newEndMonthIndex} onChange={(e) => setNewEndMonthIndex(parseInt(e.target.value))} style={{ flex: 1, backgroundColor: '#FFFFFF', padding: '10px', borderRadius: 0, '--px': 'pill', fontWeight: 700, fontSize: '12px', color: 'var(--ink)', cursor: 'pointer' }}>
                               {months.map((m, idx) => (<option key={m} value={idx}>{m}</option>))}
                             </select>
-                            <select
-                              value={newEndYear}
-                              onChange={(e) => setNewEndYear(parseInt(e.target.value))}
-                              style={{ width: '80px', backgroundColor: '#FFFFFF', padding: '10px', borderRadius: '9999px', fontWeight: 700, fontSize: '12px', color: '#5C3A21', cursor: 'pointer' }}
-                            >
+                            <select value={newEndYear} onChange={(e) => setNewEndYear(parseInt(e.target.value))} style={{ width: '80px', backgroundColor: '#FFFFFF', padding: '10px', borderRadius: 0, '--px': 'pill', fontWeight: 700, fontSize: '12px', color: 'var(--ink)', cursor: 'pointer' }}>
                               {availableYears.map(y => (<option key={y} value={y}>{y}</option>))}
                             </select>
                           </div>
                         </div>
                       </div>
                     </div>
-
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
-                      <button onClick={() => setIsAddGoalModalOpen(false)} style={{ backgroundColor: '#FFF3CD', borderRadius: '9999px', padding: '10px 20px', fontWeight: 800, fontSize: '13px', color: '#5C3A21', cursor: 'pointer' }}>Cancel</button>
-                      <button onClick={handleCreateSavingsGoal} style={{ backgroundColor: '#DFB15B', borderRadius: '9999px', padding: '10px 24px', fontWeight: 800, fontSize: '13px', color: '#FFFFFF', cursor: 'pointer', boxShadow: '0 4px 15px rgba(223,177,91,0.3)' }}>Create Goal</button>
+                      <button onClick={() => setIsAddGoalModalOpen(false)} style={{ backgroundColor: 'var(--px-butter)', borderRadius: 0, '--px': 'pill', padding: '10px 20px', fontWeight: 800, fontSize: '13px', color: 'var(--ink)', cursor: 'pointer' }}>Cancel</button>
+                      <button onClick={handleCreateSavingsGoal} style={{ backgroundColor: 'var(--px-pink)', borderRadius: 0, '--px': 'pill', padding: '10px 24px', fontWeight: 800, fontSize: '13px', color: '#FFFFFF', cursor: 'pointer', boxShadow: '0 4px 15px rgba(223,177,91,0.3)' }}>Create Goal</button>
                     </div>
                   </div>
                 </div>
               )}
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', flex: 1, overflowY: 'auto' }}>
                 {savingsGoals.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '48px', backgroundColor: '#FFF9E6', borderRadius: '28px', color: '#5C3A21', fontWeight: 800, fontSize: '16px' }}>
+                  <div style={{ textAlign: 'center', padding: '48px', backgroundColor: 'var(--px-card)', borderRadius: 0, '--px': 'panel', color: 'var(--ink)', fontWeight: 800, fontSize: '16px' }}>
+                    <Sprite src={spBunny} className="px-empty-sprite" />
                     No savings goals created yet. Click "Add New Savings Goal" above!
                   </div>
                 ) : (
@@ -1456,76 +1523,68 @@ export default function App() {
                     const progressPct = goalAmountNum > 0 ? Math.min(100, Math.round((totalSavedNum / goalAmountNum) * 100)) : 0;
 
                     return (
-                      <div key={goal.id} style={{ backgroundColor: '#FFF9E6', borderRadius: '32px', padding: '24px', boxShadow: '0 8px 25px rgba(223,177,91,0.15)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                      <div key={goal.id} style={{ backgroundColor: 'var(--px-card)', borderRadius: 0, '--px': 'panel', padding: '24px', boxShadow: '0 8px 25px rgba(223,177,91,0.15)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '14px' }}>
                           <div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
-                              <h3 className="butter-title" style={{ fontSize: '20px', color: '#C68B59', margin: 0 }}>{goal.name}</h3>
-                              <button onClick={() => handleDeleteGoal(goal.id)} style={{ backgroundColor: '#FFF3CD', borderRadius: '9999px', padding: '4px 10px', color: '#C68B59', fontWeight: 800, fontSize: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <h3 className="kutitap-title" style={{ fontSize: '20px', color: 'var(--px-accent)', margin: 0 }}>{goal.name}</h3>
+                              <button onClick={() => handleDeleteGoal(goal.id)} style={{ backgroundColor: 'var(--px-butter)', borderRadius: 0, '--px': 'pill', padding: '4px 10px', color: 'var(--px-accent)', fontWeight: 800, fontSize: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                 <Trash2 style={{ width: '12px', height: '12px' }} /> Delete
                               </button>
                             </div>
-                            <div style={{ fontSize: '12px', fontWeight: 700, color: '#8C7A6B' }}>
-                              Start: <span style={{ color: '#5C3A21', fontWeight: 800 }}>{goal.monthsList[0]?.monthKey || 'N/A'}</span> | End: <span style={{ color: '#5C3A21', fontWeight: 800 }}>{goal.monthsList[goal.monthsList.length - 1]?.monthKey || 'N/A'}</span>
+                            <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--px-muted)' }}>
+                              Start: <span style={{ color: 'var(--ink)', fontWeight: 800 }}>{goal.monthsList[0]?.monthKey || 'N/A'}</span> | End: <span style={{ color: 'var(--ink)', fontWeight: 800 }}>{goal.monthsList[goal.monthsList.length - 1]?.monthKey || 'N/A'}</span>
                             </div>
                           </div>
 
                           <div style={{ display: 'flex', gap: '10px' }}>
-                            <div style={{ backgroundColor: '#FFFFFF', padding: '12px 18px', borderRadius: '20px', textAlign: 'center', minWidth: '100px', boxShadow: '0 4px 12px rgba(223,177,91,0.08)' }}>
-                              <div style={{ fontSize: '10px', fontWeight: 800, color: '#5C3A21', textTransform: 'uppercase', marginBottom: '2px' }}>Goal Amount</div>
-                              <div style={{ fontSize: '15px', fontWeight: 800, color: '#5C3A21' }}>₱{goalAmountNum.toLocaleString()}</div>
+                            <div style={{ backgroundColor: '#FFFFFF', padding: '12px 18px', borderRadius: 0, '--px': 'card', textAlign: 'center', minWidth: '100px', boxShadow: '0 4px 12px rgba(223,177,91,0.08)' }}>
+                              <div style={{ fontSize: '10px', fontWeight: 800, color: 'var(--ink)', textTransform: 'uppercase', marginBottom: '2px' }}>Goal Amount</div>
+                              <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--ink)' }}>₱{goalAmountNum.toLocaleString()}</div>
                             </div>
-                            <div style={{ backgroundColor: '#FFFFFF', padding: '12px 18px', borderRadius: '20px', textAlign: 'center', minWidth: '120px', boxShadow: '0 4px 12px rgba(200,230,201,0.15)' }}>
-                              <div style={{ fontSize: '10px', fontWeight: 800, color: '#2E7D32', textTransform: 'uppercase', marginBottom: '2px' }}>Total Saved</div>
-                              <div style={{ fontSize: '15px', fontWeight: 800, color: '#2E7D32' }}>₱{totalSavedNum.toLocaleString()} ({progressPct}%)</div>
+                            <div style={{ backgroundColor: '#FFFFFF', padding: '12px 18px', borderRadius: 0, '--px': 'card', textAlign: 'center', minWidth: '120px', boxShadow: '0 4px 12px rgba(200,230,201,0.15)' }}>
+                              <div style={{ fontSize: '10px', fontWeight: 800, color: 'var(--px-green-d)', textTransform: 'uppercase', marginBottom: '2px' }}>Total Saved</div>
+                              <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--px-green-d)' }}>₱{totalSavedNum.toLocaleString()} ({progressPct}%)</div>
                             </div>
-                            <div style={{ backgroundColor: '#FFFFFF', padding: '12px 18px', borderRadius: '20px', textAlign: 'center', minWidth: '100px', boxShadow: '0 4px 12px rgba(223,177,91,0.08)' }}>
-                              <div style={{ fontSize: '10px', fontWeight: 800, color: '#C68B59', textTransform: 'uppercase', marginBottom: '2px' }}>Amount Left</div>
-                              <div style={{ fontSize: '15px', fontWeight: 800, color: '#C68B59' }}>₱{amountLeftNum.toLocaleString()}</div>
+                            <div style={{ backgroundColor: '#FFFFFF', padding: '12px 18px', borderRadius: 0, '--px': 'card', textAlign: 'center', minWidth: '100px', boxShadow: '0 4px 12px rgba(223,177,91,0.08)' }}>
+                              <div style={{ fontSize: '10px', fontWeight: 800, color: 'var(--px-accent)', textTransform: 'uppercase', marginBottom: '2px' }}>Amount Left</div>
+                              <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--px-accent)' }}>₱{amountLeftNum.toLocaleString()}</div>
                             </div>
                           </div>
                         </div>
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '100%' }}>
-                          <div style={{ textAlign: 'center', fontSize: '12px', fontWeight: 800, color: '#5C3A21' }}>
-                            Progress: <span style={{ color: '#2E7D32' }}>{progressPct}%</span> Completed
+                          <div style={{ textAlign: 'center', fontSize: '12px', fontWeight: 800, color: 'var(--ink)' }}>
+                            Progress: <span style={{ color: 'var(--px-green-d)' }}>{progressPct}%</span> Completed
                           </div>
-                          <div style={{ width: '100%', height: '16px', backgroundColor: '#FFFFFF', borderRadius: '9999px', overflow: 'hidden', padding: '2px', boxShadow: 'inset 0 2px 6px rgba(0,0,0,0.05)' }}>
-                            <div style={{ height: '100%', backgroundColor: '#DFB15B', borderRadius: '9999px', width: `${progressPct}%`, transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)' }} />
+                          <div style={{ width: '100%', height: '16px', backgroundColor: '#FFFFFF', borderRadius: 0, '--px': 'pill', overflow: 'hidden', padding: '2px', boxShadow: 'inset 0 2px 6px rgba(0,0,0,0.05)' }}>
+                            <div style={{ height: '100%', backgroundColor: 'var(--px-pink)', borderRadius: 0, '--px': 'pill', width: `${progressPct}%`, transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)' }} />
                           </div>
                         </div>
 
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', borderTop: '2px dashed #FFEAA7', paddingTop: '14px' }}>
-                          <div style={{ fontSize: '12px', fontWeight: 800, color: '#5C3A21', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                            Month-by-Month Honey Schedule
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', borderTop: '2px dashed var(--px-sun)', paddingTop: '14px' }}>
+                          <div style={{ fontSize: '12px', fontWeight: 800, color: 'var(--ink)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                            Month-by-Month Honey Schedule (Dynamic Redistribution)
                           </div>
                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: '10px' }}>
                             {goal.monthsList.map((mItem) => (
-                              <div key={mItem.monthKey} style={{ backgroundColor: '#FFFFFF', borderRadius: '20px', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: '8px', boxShadow: '0 4px 12px rgba(223,177,91,0.08)' }}>
+                              <div key={mItem.monthKey} style={{ backgroundColor: '#FFFFFF', borderRadius: 0, '--px': 'card', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: '8px', boxShadow: '0 4px 12px rgba(223,177,91,0.08)' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                  <span style={{ fontSize: '12px', fontWeight: 800, color: '#5C3A21' }}>{mItem.monthKey}</span>
+                                  <span style={{ fontSize: '12px', fontWeight: 800, color: 'var(--ink)' }}>{mItem.monthKey}</span>
                                   <button
                                     onClick={() => handleGoalMonthTogglePaid(goal.id, mItem.monthKey)}
-                                    style={{
-                                      borderRadius: '9999px',
-                                      padding: '4px 12px',
-                                      fontWeight: 800,
-                                      fontSize: '11px',
-                                      cursor: 'pointer',
-                                      backgroundColor: mItem.paid ? '#C8E6C9' : '#FFF3CD',
-                                      color: mItem.paid ? '#2E7D32' : '#C68B59'
-                                    }}
+                                    style={{ borderRadius: 0, '--px': 'pill', padding: '4px 12px', fontWeight: 800, fontSize: '11px', cursor: 'pointer', backgroundColor: mItem.paid ? 'var(--px-mint)' : 'var(--px-butter)', color: mItem.paid ? 'var(--px-green-d)' : 'var(--px-accent)' }}
                                   >
                                     {mItem.paid ? 'Paid' : 'Not Paid'}
                                   </button>
                                 </div>
-                                <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#FFFBEA', borderRadius: '9999px', padding: '4px 10px' }}>
-                                  <span style={{ fontSize: '12px', fontWeight: 800, color: '#C68B59', marginRight: '4px' }}>₱</span>
+                                <div style={{ display: 'flex', alignItems: 'center', backgroundColor: 'var(--px-paper)', borderRadius: 0, '--px': 'pill', padding: '4px 10px' }}>
+                                  <span style={{ fontSize: '12px', fontWeight: 800, color: 'var(--px-accent)', marginRight: '4px' }}>₱</span>
                                   <input
                                     type="number"
-                                    value={mItem.amount}
+                                    value={mItem.amount === 0 || mItem.amount === '0' ? '' : mItem.amount}
                                     onChange={(e) => handleGoalMonthAmountChange(goal.id, mItem.monthKey, e.target.value)}
-                                    style={{ width: '100%', backgroundColor: 'transparent', fontWeight: 700, fontSize: '13px', color: '#5C3A21', textAlign: 'left' }}
+                                    style={{ width: '100%', backgroundColor: 'transparent', fontWeight: 700, fontSize: '13px', color: 'var(--ink)', textAlign: 'left' }}
                                   />
                                 </div>
                               </div>
@@ -1543,51 +1602,34 @@ export default function App() {
           {/* LOANS TAB */}
           {activeTab === 'loans' && (
             <div style={{ width: '100%', display: 'flex', flexDirection: 'column', minHeight: '100%', gap: '16px' }}>
-              <div style={{ background: 'linear-gradient(135deg, #FFF9E6 0%, #FFF3CD 100%)', borderRadius: '32px', padding: '22px 26px', boxShadow: '0 10px 30px rgba(223,177,91,0.18)', display: 'flex', flexDirection: 'column', gap: '14px', flexShrink: 0 }}>
+              <div style={{ background: 'var(--px-card)', borderRadius: 0, '--px': 'panel', padding: '22px 26px', boxShadow: '0 10px 30px rgba(223,177,91,0.18)', display: 'flex', flexDirection: 'column', gap: '14px', flexShrink: 0 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
                   <div>
-                    <div style={{ fontSize: '11px', fontWeight: 800, color: '#C68B59', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <CreditCard style={{ width: '16px', height: '16px' }} /> Loans Honey Dashboard
+                    <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--px-accent)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <CreditCard style={{ width: '16px', height: '16px' }} /> Loans Dashboard
                     </div>
                     
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '4px', position: 'relative' }}>
                       <div
                         onClick={() => setIsDashMonthPickerOpen(!isDashMonthPickerOpen)}
-                        className="butter-title"
-                        style={{ fontSize: '18px', color: '#C68B59', cursor: 'pointer', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                        className="kutitap-title"
+                        style={{ fontSize: '18px', color: 'var(--px-accent)', cursor: 'pointer', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                       >
                         <span>{dashMonthName} {dashYear}</span>
-                        <span style={{ fontSize: '11px', color: '#8C7A6B', display: 'flex', alignItems: 'center', gap: '2px' }}>Change <ChevronDown style={{ width: '12px', height: '12px' }} /></span>
+                        <span style={{ fontSize: '11px', color: 'var(--px-muted)', display: 'flex', alignItems: 'center', gap: '2px' }}>Change <ChevronDown style={{ width: '12px', height: '12px' }} /></span>
                       </div>
 
                       {isDashMonthPickerOpen && (
-                        <div style={{ position: 'absolute', top: '40px', left: 0, backgroundColor: '#FFFFFF', borderRadius: '24px', padding: '16px', boxShadow: '0 20px 40px rgba(223,177,91,0.25)', zIndex: 200, width: '300px' }}>
+                        <div style={{ position: 'absolute', top: '40px', left: 0, backgroundColor: '#FFFFFF', borderRadius: 0, '--px': 'card', padding: '16px', boxShadow: '0 20px 40px rgba(223,177,91,0.25)', zIndex: 200, width: '300px' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                            <span style={{ fontSize: '11px', fontWeight: 800, color: '#C68B59', textTransform: 'uppercase' }}>Select Dashboard Month</span>
-                            <select
-                              value={dashYear}
-                              onChange={(e) => setDashYear(parseInt(e.target.value))}
-                              style={{ backgroundColor: '#FFF3CD', borderRadius: '9999px', padding: '4px 10px', fontWeight: 800, color: '#C68B59', fontSize: '12px', cursor: 'pointer' }}
-                            >
+                            <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--px-accent)', textTransform: 'uppercase' }}>Select Dashboard Month</span>
+                            <select value={dashYear} onChange={(e) => setDashYear(parseInt(e.target.value))} style={{ backgroundColor: 'var(--px-butter)', borderRadius: 0, '--px': 'pill', padding: '4px 10px', fontWeight: 800, color: 'var(--px-accent)', fontSize: '12px', cursor: 'pointer' }}>
                               {availableYears.map(y => (<option key={y} value={y}>{y}</option>))}
                             </select>
                           </div>
-
                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
                             {months.map((m, idx) => (
-                              <button
-                                key={m}
-                                onClick={() => { setDashMonthIndex(idx); setIsDashMonthPickerOpen(false); }}
-                                style={{
-                                  padding: '8px 4px',
-                                  borderRadius: '9999px',
-                                  fontWeight: 700,
-                                  fontSize: '11px',
-                                  cursor: 'pointer',
-                                  backgroundColor: dashMonthIndex === idx ? '#DFB15B' : '#FFF9E6',
-                                  color: dashMonthIndex === idx ? '#FFFFFF' : '#5C3A21'
-                                }}
-                              >
+                              <button key={m} onClick={() => { setDashMonthIndex(idx); setIsDashMonthPickerOpen(false); }} style={{ padding: '8px 4px', borderRadius: 0, '--px': 'pill', fontWeight: 700, fontSize: '11px', cursor: 'pointer', backgroundColor: dashMonthIndex === idx ? 'var(--px-pink)' : 'var(--px-card)', color: dashMonthIndex === idx ? '#FFFFFF' : 'var(--ink)' }}>
                                 {m.slice(0, 3)}
                               </button>
                             ))}
@@ -1599,35 +1641,35 @@ export default function App() {
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '12px' }}>
-                  <div style={{ backgroundColor: '#FFFFFF', padding: '14px', borderRadius: '20px', textAlign: 'center', boxShadow: '0 4px 12px rgba(223,177,91,0.08)' }}>
-                    <div style={{ fontSize: '10px', fontWeight: 800, color: '#C68B59', textTransform: 'uppercase', marginBottom: '4px' }}>{dashMonthName} 15th Cutoff</div>
-                    <div style={{ fontSize: '16px', fontWeight: 800, color: '#5C3A21' }}>₱{dash15Summary.total.toLocaleString()}</div>
-                    <div style={{ fontSize: '10px', fontWeight: 700, marginTop: '2px', color: dash15Summary.paid ? '#2E7D32' : '#C68B59' }}>{dash15Summary.paid ? 'Paid' : 'Pending'}</div>
+                  <div style={{ backgroundColor: '#FFFFFF', padding: '14px', borderRadius: 0, '--px': 'card', textAlign: 'center', boxShadow: '0 4px 12px rgba(223,177,91,0.08)' }}>
+                    <div style={{ fontSize: '10px', fontWeight: 800, color: 'var(--px-accent)', textTransform: 'uppercase', marginBottom: '4px' }}>{dashMonthName} 15th Cutoff</div>
+                    <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--ink)' }}>₱{dash15Summary.total.toLocaleString()}</div>
+                    <div style={{ fontSize: '10px', fontWeight: 700, marginTop: '2px', color: dash15Summary.paid ? 'var(--px-green-d)' : 'var(--px-accent)' }}>{dash15Summary.paid ? 'Paid' : 'Pending'}</div>
                   </div>
-                  <div style={{ backgroundColor: '#FFFFFF', padding: '14px', borderRadius: '20px', textAlign: 'center', boxShadow: '0 4px 12px rgba(223,177,91,0.08)' }}>
-                    <div style={{ fontSize: '10px', fontWeight: 800, color: '#C68B59', textTransform: 'uppercase', marginBottom: '4px' }}>{dashMonthName} {getCutoff30Label(dashMonthName, dashYear)}th Cutoff</div>
-                    <div style={{ fontSize: '16px', fontWeight: 800, color: '#5C3A21' }}>₱{dash30Summary.total.toLocaleString()}</div>
-                    <div style={{ fontSize: '10px', fontWeight: 700, marginTop: '2px', color: dash30Summary.paid ? '#2E7D32' : '#C68B59' }}>{dash30Summary.paid ? 'Paid' : 'Pending'}</div>
+                  <div style={{ backgroundColor: '#FFFFFF', padding: '14px', borderRadius: 0, '--px': 'card', textAlign: 'center', boxShadow: '0 4px 12px rgba(223,177,91,0.08)' }}>
+                    <div style={{ fontSize: '10px', fontWeight: 800, color: 'var(--px-accent)', textTransform: 'uppercase', marginBottom: '4px' }}>{dashMonthName} {getCutoff30Label(dashMonthName, dashYear)}th Cutoff</div>
+                    <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--ink)' }}>₱{dash30Summary.total.toLocaleString()}</div>
+                    <div style={{ fontSize: '10px', fontWeight: 700, marginTop: '2px', color: dash30Summary.paid ? 'var(--px-green-d)' : 'var(--px-accent)' }}>{dash30Summary.paid ? 'Paid' : 'Pending'}</div>
                   </div>
-                  <div style={{ backgroundColor: '#FFFFFF', padding: '14px', borderRadius: '20px', textAlign: 'center', boxShadow: '0 4px 12px rgba(223,177,91,0.08)' }}>
-                    <div style={{ fontSize: '10px', fontWeight: 800, color: '#5C3A21', textTransform: 'uppercase', marginBottom: '4px' }}>Total {dashMonthName} Loans</div>
-                    <div style={{ fontSize: '16px', fontWeight: 800, color: '#5C3A21' }}>₱{totalDashMonthLoans.toLocaleString()}</div>
-                    <div style={{ fontSize: '10px', fontWeight: 700, color: '#8C7A6B', marginTop: '2px' }}>Consolidated</div>
+                  <div style={{ backgroundColor: '#FFFFFF', padding: '14px', borderRadius: 0, '--px': 'card', textAlign: 'center', boxShadow: '0 4px 12px rgba(223,177,91,0.08)' }}>
+                    <div style={{ fontSize: '10px', fontWeight: 800, color: 'var(--px-accent)', textTransform: 'uppercase', marginBottom: '4px' }}>Total {dashMonthName} Loans</div>
+                    <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--ink)' }}>₱{totalDashMonthLoans.toLocaleString()}</div>
+                    <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--px-muted)', marginTop: '2px' }}>Consolidated</div>
                   </div>
-                  <div style={{ backgroundColor: '#FFFFFF', padding: '14px', borderRadius: '20px', textAlign: 'center', boxShadow: '0 4px 12px rgba(223,177,91,0.08)' }}>
-                    <div style={{ fontSize: '10px', fontWeight: 800, color: '#5C3A21', textTransform: 'uppercase', marginBottom: '4px' }}>{loanTableYear} Annual Total</div>
-                    <div style={{ fontSize: '16px', fontWeight: 800, color: '#5C3A21' }}>₱{yearTotalCost.toLocaleString()}</div>
-                    <div style={{ fontSize: '10px', fontWeight: 700, color: '#8C7A6B', marginTop: '2px' }}>All Categories</div>
+                  <div style={{ backgroundColor: '#FFFFFF', padding: '14px', borderRadius: 0, '--px': 'card', textAlign: 'center', boxShadow: '0 4px 12px rgba(223,177,91,0.08)' }}>
+                    <div style={{ fontSize: '10px', fontWeight: 800, color: 'var(--px-accent)', textTransform: 'uppercase', marginBottom: '4px' }}>{loanTableYear} Annual Total</div>
+                    <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--ink)' }}>₱{yearTotalCost.toLocaleString()}</div>
+                    <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--px-muted)', marginTop: '2px' }}>All Categories</div>
                   </div>
-                  <div style={{ backgroundColor: '#FFFFFF', padding: '14px', borderRadius: '20px', textAlign: 'center', boxShadow: '0 4px 12px rgba(200,230,201,0.2)' }}>
-                    <div style={{ fontSize: '10px', fontWeight: 800, color: '#2E7D32', textTransform: 'uppercase', marginBottom: '4px' }}>{loanTableYear} Total Paid</div>
-                    <div style={{ fontSize: '16px', fontWeight: 800, color: '#2E7D32' }}>₱{yearTotalPaid.toLocaleString()}</div>
-                    <div style={{ fontSize: '10px', fontWeight: 700, color: '#2E7D32', marginTop: '2px' }}>Cleared</div>
+                  <div style={{ backgroundColor: '#FFFFFF', padding: '14px', borderRadius: 0, '--px': 'card', textAlign: 'center', boxShadow: '0 4px 12px rgba(200,230,201,0.2)' }}>
+                    <div style={{ fontSize: '10px', fontWeight: 800, color: 'var(--px-green-d)', textTransform: 'uppercase', marginBottom: '4px' }}>{loanTableYear} Total Paid</div>
+                    <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--px-green-d)' }}>₱{yearTotalPaid.toLocaleString()}</div>
+                    <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--px-green-d)', marginTop: '2px' }}>Cleared</div>
                   </div>
-                  <div style={{ backgroundColor: '#FFFFFF', padding: '14px', borderRadius: '20px', textAlign: 'center', boxShadow: '0 4px 12px rgba(223,177,91,0.08)' }}>
-                    <div style={{ fontSize: '10px', fontWeight: 800, color: '#C68B59', textTransform: 'uppercase', marginBottom: '4px' }}>{loanTableYear} Total Unpaid</div>
-                    <div style={{ fontSize: '16px', fontWeight: 800, color: '#C68B59' }}>₱{yearTotalUnpaid.toLocaleString()}</div>
-                    <div style={{ fontSize: '10px', fontWeight: 700, color: '#C68B59', marginTop: '2px' }}>Remaining</div>
+                  <div style={{ backgroundColor: '#FFFFFF', padding: '14px', borderRadius: 0, '--px': 'card', textAlign: 'center', boxShadow: '0 4px 12px rgba(223,177,91,0.08)' }}>
+                    <div style={{ fontSize: '10px', fontWeight: 800, color: 'var(--px-accent)', textTransform: 'uppercase', marginBottom: '4px' }}>{loanTableYear} Total Unpaid</div>
+                    <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--px-accent)' }}>₱{yearTotalUnpaid.toLocaleString()}</div>
+                    <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--px-accent)', marginTop: '2px' }}>Remaining</div>
                   </div>
                 </div>
               </div>
@@ -1637,88 +1679,57 @@ export default function App() {
                   {loanCategories.map(cat => {
                     const isActive = activeLoanCategory === cat;
                     return (
-                      <button
-                        key={cat}
-                        onClick={() => setActiveLoanCategory(cat)}
-                        style={{
-                          padding: '10px 20px',
-                          borderRadius: '9999px',
-                          fontWeight: 800,
-                          fontSize: '13px',
-                          cursor: 'pointer',
-                          backgroundColor: isActive ? '#DFB15B' : '#FFFFFF',
-                          color: isActive ? '#FFFFFF' : '#5C3A21',
-                          boxShadow: isActive ? '0 4px 15px rgba(223,177,91,0.4)' : '0 2px 8px rgba(0,0,0,0.04)'
-                        }}
-                      >
+                      <button key={cat} onClick={() => setActiveLoanCategory(cat)} style={{ padding: '10px 20px', borderRadius: 0, '--px': 'pill', fontWeight: 800, fontSize: '13px', cursor: 'pointer', backgroundColor: isActive ? 'var(--px-pink)' : '#FFFFFF', color: isActive ? '#FFFFFF' : 'var(--ink)', boxShadow: isActive ? '0 4px 15px rgba(223,177,91,0.4)' : '0 2px 8px rgba(0,0,0,0.04)' }}>
                         {cat}
                       </button>
                     );
                   })}
                 </div>
-
-                <button
-                  onClick={() => setIsAddColumnModalOpen(true)}
-                  style={{ backgroundColor: '#DFB15B', color: '#FFFFFF', borderRadius: '9999px', padding: '10px 20px', fontWeight: 800, fontSize: '13px', cursor: 'pointer', boxShadow: '0 4px 15px rgba(223,177,91,0.35)', display: 'flex', alignItems: 'center', gap: '6px' }}
-                >
+                <button onClick={() => setIsAddColumnModalOpen(true)} style={{ backgroundColor: 'var(--px-pink)', color: '#FFFFFF', borderRadius: 0, '--px': 'pill', padding: '10px 20px', fontWeight: 800, fontSize: '13px', cursor: 'pointer', boxShadow: '0 4px 15px rgba(223,177,91,0.35)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <Plus style={{ width: '16px', height: '16px' }} /> Add Column to {activeLoanCategory}
                 </button>
               </div>
 
               {isAddColumnModalOpen && (
                 <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(92,58,33,0.3)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-                  <div style={{ backgroundColor: '#FFF9E6', borderRadius: '32px', padding: '24px 28px', width: '100%', maxWidth: '420px', boxShadow: '0 20px 50px rgba(223,177,91,0.3)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px dashed #FFEAA7', paddingBottom: '10px' }}>
-                      <div className="butter-title" style={{ fontSize: '16px', color: '#C68B59' }}>Add Column to {activeLoanCategory}</div>
-                      <button onClick={() => setIsAddColumnModalOpen(false)} style={{ backgroundColor: '#FFF3CD', borderRadius: '9999px', width: '30px', height: '30px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#C68B59', fontWeight: 800 }}>
-                        <X style={{ width: '14px', height: '14px' }} />
-                      </button>
+                  <div style={{ backgroundColor: 'var(--px-card)', borderRadius: 0, '--px': 'panel', padding: '24px 28px', width: '100%', maxWidth: '420px', boxShadow: '0 20px 50px rgba(223,177,91,0.3)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px dashed var(--px-sun)', paddingBottom: '10px' }}>
+                      <div className="kutitap-title" style={{ fontSize: '16px', color: 'var(--px-accent)' }}>Add Column to {activeLoanCategory}</div>
+                      <button onClick={() => setIsAddColumnModalOpen(false)} style={{ backgroundColor: 'var(--px-butter)', borderRadius: 0, '--px': 'pill', width: '30px', height: '30px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--px-accent)', fontWeight: 800 }}><X style={{ width: '14px', height: '14px' }} /></button>
                     </div>
-
                     <div>
-                      <label style={{ fontSize: '12px', fontWeight: 800, color: '#5C3A21', display: 'block', marginBottom: '4px' }}>Item / Column Name</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. Combined, Arrears, Gadget"
-                        value={newColumnName}
-                        onChange={(e) => setNewColumnName(e.target.value)}
-                        style={{ width: '100%', backgroundColor: '#FFFFFF', padding: '12px 16px', borderRadius: '9999px', fontWeight: 700, fontSize: '13px', color: '#5C3A21' }}
-                      />
+                      <label style={{ fontSize: '12px', fontWeight: 800, color: 'var(--ink)', display: 'block', marginBottom: '4px' }}>Item / Column Name</label>
+                      <input type="text" placeholder="e.g. Combined, Arrears, Gadget" value={newColumnName} onChange={(e) => setNewColumnName(e.target.value)} style={{ width: '100%', backgroundColor: '#FFFFFF', padding: '12px 16px', borderRadius: 0, '--px': 'pill', fontWeight: 700, fontSize: '13px', color: 'var(--ink)' }} />
                     </div>
-
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '6px' }}>
-                      <button onClick={() => setIsAddColumnModalOpen(false)} style={{ backgroundColor: '#FFF3CD', borderRadius: '9999px', padding: '10px 18px', fontWeight: 800, fontSize: '13px', color: '#5C3A21', cursor: 'pointer' }}>Cancel</button>
-                      <button onClick={handleAddColumn} style={{ backgroundColor: '#DFB15B', borderRadius: '9999px', padding: '10px 20px', fontWeight: 800, fontSize: '13px', color: '#FFFFFF', cursor: 'pointer', boxShadow: '0 4px 15px rgba(223,177,91,0.3)' }}>Add Column</button>
+                      <button onClick={() => setIsAddColumnModalOpen(false)} style={{ backgroundColor: 'var(--px-butter)', borderRadius: 0, '--px': 'pill', padding: '10px 18px', fontWeight: 800, fontSize: '13px', color: 'var(--ink)', cursor: 'pointer' }}>Cancel</button>
+                      <button onClick={handleAddColumn} style={{ backgroundColor: 'var(--px-pink)', borderRadius: 0, '--px': 'pill', padding: '10px 20px', fontWeight: 800, fontSize: '13px', color: '#FFFFFF', cursor: 'pointer', boxShadow: '0 4px 15px rgba(223,177,91,0.3)' }}>Add Column</button>
                     </div>
                   </div>
                 </div>
               )}
 
-              <div style={{ backgroundColor: '#FFFFFF', borderRadius: '28px', overflowX: 'auto', boxShadow: '0 8px 25px rgba(223,177,91,0.15)', flex: 1 }}>
+              <div style={{ backgroundColor: '#FFFFFF', borderRadius: 0, '--px': 'panel', overflowX: 'auto', boxShadow: '0 8px 25px rgba(223,177,91,0.15)', flex: 1 }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '650px' }}>
                   <thead>
-                    <tr style={{ backgroundColor: '#FFF9E6', borderBottom: '3px dashed #FFEAA7' }}>
-                      <th style={{ padding: '14px 18px', fontSize: '13px', fontWeight: 800, color: '#C68B59', width: '140px', textAlign: 'center' }}>
-                        Date / Cutoff ({loanTableYear})
-                      </th>
-                      <th style={{ padding: '14px 18px', fontSize: '14px', fontWeight: 800, color: '#C68B59', textAlign: 'center' }} colSpan={(loanTableData[activeLoanCategory]?.columns.length || 0) + 2}>
-                        {activeLoanCategory} Honey Table View
+                    <tr style={{ backgroundColor: 'var(--px-card)', borderBottom: '3px dashed var(--px-sun)' }}>
+                      <th style={{ padding: '14px 18px', fontSize: '13px', fontWeight: 800, color: 'var(--px-accent)', width: '140px', textAlign: 'center' }}>Date / Cutoff ({loanTableYear})</th>
+                      <th style={{ padding: '14px 18px', fontSize: '14px', fontWeight: 800, color: 'var(--px-accent)', textAlign: 'center' }} colSpan={(loanTableData[activeLoanCategory]?.columns.length || 0) + 2}>
+                        {activeLoanCategory} Table View
                       </th>
                     </tr>
-                    <tr style={{ backgroundColor: '#FFF3CD', borderBottom: '2px solid #FFEAA7' }}>
-                      <th style={{ padding: '10px 18px', fontSize: '12px', fontWeight: 800, color: '#5C3A21', textAlign: 'center' }}>Cutoff</th>
+                    <tr style={{ backgroundColor: 'var(--px-butter)', borderBottom: '2px solid var(--px-sun)' }}>
+                      <th style={{ padding: '10px 18px', fontSize: '12px', fontWeight: 800, color: 'var(--ink)', textAlign: 'center' }}>Cutoff</th>
                       {loanTableData[activeLoanCategory]?.columns.map(col => (
-                        <th key={col} style={{ padding: '10px 14px', fontSize: '12px', fontWeight: 800, color: '#5C3A21', textAlign: 'center' }}>
+                        <th key={col} style={{ padding: '10px 14px', fontSize: '12px', fontWeight: 800, color: 'var(--ink)', textAlign: 'center' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '6px' }}>
                             <span style={{ flex: 1, textAlign: 'center' }}>{col}</span>
-                            <button onClick={() => handleDeleteColumn(col)} title="Delete Column" style={{ backgroundColor: 'transparent', color: '#C68B59', cursor: 'pointer', padding: '2px' }}>
-                              <X style={{ width: '12px', height: '12px' }} />
-                            </button>
+                            <button onClick={() => handleDeleteColumn(col)} title="Delete Column" style={{ backgroundColor: 'transparent', color: 'var(--px-accent)', cursor: 'pointer', padding: '2px' }}><X style={{ width: '12px', height: '12px' }} /></button>
                           </div>
                         </th>
                       ))}
-                      <th style={{ padding: '10px 14px', fontSize: '12px', fontWeight: 800, color: '#2E7D32', textAlign: 'center', backgroundColor: '#F4F9F4' }}>Row Total</th>
-                      <th style={{ padding: '10px 14px', fontSize: '12px', fontWeight: 800, color: '#5C3A21', textAlign: 'center', backgroundColor: '#FFF3CD' }}>Status</th>
+                      <th style={{ padding: '10px 14px', fontSize: '12px', fontWeight: 800, color: 'var(--px-green-d)', textAlign: 'center', backgroundColor: 'var(--px-mint-lt)' }}>Row Total</th>
+                      <th style={{ padding: '10px 14px', fontSize: '12px', fontWeight: 800, color: 'var(--ink)', textAlign: 'center', backgroundColor: 'var(--px-butter)' }}>Status</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1733,10 +1744,8 @@ export default function App() {
                       const isPaid = !!catData.paidStatus[rowKey];
 
                       return (
-                        <tr key={rowKey} style={{ borderBottom: '1px solid #FFF3CD', backgroundColor: idx % 2 === 0 ? '#FFFFFF' : '#FFFBEA' }}>
-                          <td style={{ padding: '10px 18px', fontSize: '13px', fontWeight: 800, color: '#5C3A21', textAlign: 'center', backgroundColor: '#FFF9E6' }}>
-                            {row.label}
-                          </td>
+                        <tr key={rowKey} style={{ borderBottom: '1px solid var(--px-butter)', backgroundColor: idx % 2 === 0 ? '#FFFFFF' : 'var(--px-paper)' }}>
+                          <td style={{ padding: '10px 18px', fontSize: '13px', fontWeight: 800, color: 'var(--ink)', textAlign: 'center', backgroundColor: 'var(--px-card)' }}>{row.label}</td>
                           {catData.columns.map(col => {
                             const val = rowValues[col] || '';
                             return (
@@ -1744,39 +1753,18 @@ export default function App() {
                                 <input
                                   type="number"
                                   placeholder="0"
-                                  value={val}
+                                  value={val === 0 || val === '0' ? '' : val}
                                   onChange={(e) => handleCellChange(activeLoanCategory, loanTableYear, row.month, row.cutoff, col, e.target.value)}
-                                  style={{
-                                    width: '100%',
-                                    padding: '6px 8px',
-                                    borderRadius: '9999px',
-                                    fontWeight: 700,
-                                    fontSize: '13px',
-                                    color: '#5C3A21',
-                                    textAlign: 'center',
-                                    backgroundColor: val ? '#FFEAA7' : '#FFFBEA'
-                                  }}
+                                  style={{ width: '100%', padding: '6px 8px', borderRadius: 0, '--px': 'pill', fontWeight: 700, fontSize: '13px', color: 'var(--ink)', textAlign: 'center', backgroundColor: val ? 'var(--px-sun)' : 'var(--px-paper)' }}
                                 />
                               </td>
                             );
                           })}
-                          <td style={{ padding: '10px 14px', fontSize: '13px', fontWeight: 800, color: '#2E7D32', textAlign: 'center', backgroundColor: '#F4F9F4' }}>
+                          <td style={{ padding: '10px 14px', fontSize: '13px', fontWeight: 800, color: 'var(--px-green-d)', textAlign: 'center', backgroundColor: 'var(--px-mint-lt)' }}>
                             {rowTotalNum > 0 ? `₱${rowTotalNum.toLocaleString()}` : '-'}
                           </td>
                           <td style={{ padding: '6px 10px', textAlign: 'center' }}>
-                            <button
-                              onClick={() => handleToggleLoanPaid(activeLoanCategory, loanTableYear, row.month, row.cutoff)}
-                              style={{
-                                padding: '6px 12px',
-                                borderRadius: '9999px',
-                                fontWeight: 800,
-                                fontSize: '11px',
-                                cursor: 'pointer',
-                                width: '100%',
-                                backgroundColor: isPaid ? '#C8E6C9' : '#FFF3CD',
-                                color: isPaid ? '#2E7D32' : '#C68B59'
-                              }}
-                            >
+                            <button onClick={() => handleToggleLoanPaid(activeLoanCategory, loanTableYear, row.month, row.cutoff)} style={{ padding: '6px 12px', borderRadius: 0, '--px': 'pill', fontWeight: 800, fontSize: '11px', cursor: 'pointer', width: '100%', backgroundColor: isPaid ? 'var(--px-mint)' : 'var(--px-butter)', color: isPaid ? 'var(--px-green-d)' : 'var(--px-accent)' }}>
                               {isPaid ? 'Paid' : 'Not Paid'}
                             </button>
                           </td>
@@ -1793,116 +1781,70 @@ export default function App() {
           {activeTab === 'attendance' && (
             <div style={{ width: '100%', display: 'flex', flexDirection: 'column', minHeight: '100%', gap: '20px' }}>
               <style>{`
-                @keyframes swipeRight {
-                  0% { transform: translateX(-100px); opacity: 0; }
-                  50% { transform: translateX(20px); opacity: 1; }
-                  100% { transform: translateX(0px); opacity: 1; }
-                }
-                .animate-swipe-id {
-                  animation: swipeRight 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-                }
-
                 .cutesy-dropdown {
-                  background-color: #FFF9E6;
-                  color: #C68B59;
-                  border-radius: 9999px;
-                  padding: 8px 18px;
-                  font-weight: 800;
-                  font-size: 13px;
-                  border: 2px solid #FFEAA7;
-                  cursor: pointer;
-                  outline: none;
-                  box-shadow: 0 4px 12px rgba(223,177,91,0.15);
+                  background-color: var(--px-card); color: var(--px-accent); border-radius: 9999px; padding: 8px 18px; font-weight: 800; font-size: 13px; border: 2px solid var(--px-sun); cursor: pointer; outline: none; box-shadow: 0 4px 12px rgba(223,177,91,0.15);
                 }
-                .cutesy-dropdown option {
-                  background-color: #FFF9E6;
-                  color: #C68B59;
-                  padding: 10px;
-                  font-weight: 700;
-                }
-                .cutesy-dropdown option:hover, .cutesy-dropdown option:checked {
-                  background-color: #FFEAA7 !important;
-                  color: #5C3A21 !important;
-                }
+                .cutesy-dropdown option { background-color: var(--px-card); color: var(--px-accent); padding: 10px; font-weight: 700; }
+                .cutesy-dropdown option:hover, .cutesy-dropdown option:checked { background-color: var(--px-sun) !important; color: var(--ink) !important; }
               `}</style>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: '20px', alignItems: 'stretch' }}>
-                
-                {/* FULLY DISPLAYED SMALLER ID CARD WITH SWIPE ANIMATION */}
-                <div style={{ backgroundColor: '#FFF9E6', borderRadius: '32px', padding: '16px', boxShadow: '0 8px 25px rgba(223,177,91,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                  <div className={isSwipingID ? 'animate-swipe-id' : ''} style={{ width: '100%', maxWidth: '420px', aspectRatio: '1.58 / 1', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 8px 25px rgba(223,177,91,0.25)', position: 'relative' }}>
-                    <img 
-                      src="https://i.imgur.com/VeQr3gX.png" 
-                      alt="Company ID Pass" 
-                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} 
-                    />
+                <div style={{ backgroundColor: 'var(--px-card)', borderRadius: 0, '--px': 'panel', padding: '16px', boxShadow: '0 8px 25px rgba(223,177,91,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                  <div className={isSwipingID ? 'animate-swipe-id' : ''} style={{ width: '100%', maxWidth: '420px', aspectRatio: '1.58 / 1', borderRadius: 0, '--px': 'card', overflow: 'hidden', boxShadow: '0 8px 25px rgba(223,177,91,0.25)', position: 'relative' }}>
+                    <img src="https://i.imgur.com/VeQr3gX.png" alt="Company ID Pass" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                   </div>
                 </div>
 
-                {/* PUNCH CLOCK */}
-                <div style={{ backgroundColor: '#FFF9E6', borderRadius: '32px', padding: '24px', boxShadow: '0 8px 25px rgba(223,177,91,0.15)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', textAlign: 'center' }}>
+                <div style={{ backgroundColor: 'var(--px-card)', borderRadius: 0, '--px': 'panel', padding: '24px', boxShadow: '0 8px 25px rgba(223,177,91,0.15)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', textAlign: 'center' }}>
                   <div>
-                    <div style={{ fontSize: '12px', fontWeight: 800, color: '#C68B59', textTransform: 'uppercase', marginBottom: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                      <Clock style={{ width: '16px', height: '16px' }} /> Butter Bear Punch Clock
+                    <div style={{ fontSize: '12px', fontWeight: 800, color: 'var(--px-accent)', textTransform: 'uppercase', marginBottom: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                      <Clock style={{ width: '16px', height: '16px' }} /> Punch Clock
                     </div>
-                    <div className="butter-title" style={{ fontSize: '20px', color: '#5C3A21', marginBottom: '14px' }}>
+                    <div className="kutitap-title" style={{ fontSize: '20px', color: 'var(--ink)', marginBottom: '14px' }}>
                       {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
                     </div>
-
-                    <button
-                      onClick={handleTimeInToday}
-                      style={{ backgroundColor: '#DFB15B', color: '#FFFFFF', borderRadius: '9999px', padding: '16px 24px', fontWeight: 800, fontSize: '16px', cursor: 'pointer', boxShadow: '0 6px 20px rgba(223,177,91,0.35)', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}
-                    >
+                    <button onClick={handleTimeInToday} style={{ backgroundColor: 'var(--px-pink)', color: '#FFFFFF', borderRadius: 0, '--px': 'pill', padding: '16px 24px', fontWeight: 800, fontSize: '16px', cursor: 'pointer', boxShadow: '0 6px 20px rgba(223,177,91,0.35)', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
                       <Sparkles style={{ width: '20px', height: '20px' }} /> Time In For Today!
                     </button>
                   </div>
-
-                  <div style={{ fontSize: '11px', fontWeight: 700, color: '#8C7A6B', marginTop: '10px' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--px-muted)', marginTop: '10px' }}>
                     Swipes ID pass & records your shift automatically!
                   </div>
                 </div>
               </div>
 
-              {/* CONTROLS & REAL-TIME USD/PHP RATE */}
-              <div style={{ backgroundColor: '#FFFFFF', borderRadius: '28px', padding: '18px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px', boxShadow: '0 6px 20px rgba(223,177,91,0.12)' }}>
+              <div style={{ backgroundColor: '#FFFFFF', borderRadius: 0, '--px': 'panel', padding: '18px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px', boxShadow: '0 6px 20px rgba(223,177,91,0.12)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                  <span style={{ fontSize: '15px', fontWeight: 800, color: '#5C3A21' }}>Viewing Month:</span>
-                  <select
-                    value={attMonthIndex}
-                    onChange={(e) => setAttMonthIndex(parseInt(e.target.value))}
-                    style={{ backgroundColor: '#FFF3CD', borderRadius: '9999px', padding: '8px 16px', fontWeight: 800, color: '#C68B59', fontSize: '14px', cursor: 'pointer' }}
-                  >
+                  <span style={{ fontSize: '15px', fontWeight: 800, color: 'var(--ink)' }}>Viewing Month:</span>
+                  <select value={attMonthIndex} onChange={(e) => setAttMonthIndex(parseInt(e.target.value))} style={{ backgroundColor: 'var(--px-butter)', borderRadius: 0, '--px': 'pill', padding: '8px 16px', fontWeight: 800, color: 'var(--px-accent)', fontSize: '14px', cursor: 'pointer' }}>
                     {months.map((m, idx) => (<option key={m} value={idx}>{m}</option>))}
                   </select>
-                  <select
-                    value={attYear}
-                    onChange={(e) => setAttYear(parseInt(e.target.value))}
-                    style={{ backgroundColor: '#FFF3CD', borderRadius: '9999px', padding: '8px 16px', fontWeight: 800, color: '#C68B59', fontSize: '14px', cursor: 'pointer' }}
-                  >
+                  <select value={attYear} onChange={(e) => setAttYear(parseInt(e.target.value))} style={{ backgroundColor: 'var(--px-butter)', borderRadius: 0, '--px': 'pill', padding: '8px 16px', fontWeight: 800, color: 'var(--px-accent)', fontSize: '14px', cursor: 'pointer' }}>
                     {maxAttYears.map(y => (<option key={y} value={y}>{y}</option>))}
                   </select>
                 </div>
-
-                <div style={{ display: 'flex', gap: '20px', fontSize: '13px', fontWeight: 800, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <span style={{ color: '#C68B59', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    Live USD/PHP: ₱{usdToPhpRate.toFixed(2)} 
-                    {rateTrend === 'up' ? <ArrowUpRight style={{ width: '16px', height: '16px', color: '#2E7D32' }} /> : <ArrowDownRight style={{ width: '16px', height: '16px', color: '#C68B59' }} />}
+                <div style={{ display: 'flex', gap: '20px', fontSize: '14px', fontWeight: 800, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <button onClick={handleGenerateInvoicePDF} style={{ backgroundColor: 'var(--px-green-d)', color: '#FFFFFF', borderRadius: 0, '--px': 'pill', padding: '12px 20px', fontWeight: 800, fontSize: '14px', cursor: 'pointer', boxShadow: '0 4px 15px rgba(11,122,66,0.25)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <FileText style={{ width: '18px', height: '18px' }} /> Generate Invoice
+                  </button>
+                  <span style={{ color: 'var(--px-accent)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    {isPastMonth ? 'Historical USD/PHP:' : 'Live USD/PHP:'} ₱{displayRate.toFixed(2)} 
+                    {!isPastMonth && (rateTrend === 'up' ? <ArrowUpRight style={{ width: '16px', height: '16px', color: 'var(--px-accent)' }} /> : <ArrowDownRight style={{ width: '16px', height: '16px', color: 'var(--px-accent)' }} />)}
                   </span>
-                  <span style={{ color: '#2E7D32' }}>Worked Hours: {totalWorkedHours} hrs</span>
-                  <span style={{ color: '#C68B59' }}>Total Estimated Salary: ₱{estimatedSalaryPHP.toLocaleString()}</span>
+                  <span style={{ color: 'var(--px-green-d)' }}>Worked Hours: {totalWorkedHours} hrs</span>
+                  <span style={{ color: 'var(--px-accent)' }}>Total Estimated Salary: ₱{estimatedSalaryPHP.toLocaleString()}</span>
                 </div>
               </div>
 
-              {/* WORKING DAYS ATTENDANCE TABLE (MON-FRI) */}
-              <div style={{ backgroundColor: '#FFEAA7', borderRadius: '28px', overflowX: 'auto', boxShadow: '0 8px 25px rgba(223,177,91,0.2)', flex: 1 }}>
+              <div style={{ backgroundColor: 'var(--px-sun)', borderRadius: 0, '--px': 'panel', overflowX: 'auto', boxShadow: '0 8px 25px rgba(223,177,91,0.2)', flex: 1 }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '700px' }}>
                   <thead>
-                    <tr style={{ backgroundColor: '#FFF9E6', borderBottom: '3px dashed #DFB15B' }}>
-                      <th style={{ padding: '14px 20px', fontSize: '14px', fontWeight: 800, color: '#C68B59', textAlign: 'center' }}>Shift Date ({attMonthName} {attYear})</th>
-                      <th style={{ padding: '14px 20px', fontSize: '14px', fontWeight: 800, color: '#5C3A21', textAlign: 'center' }}>Day</th>
-                      <th style={{ padding: '14px 20px', fontSize: '14px', fontWeight: 800, color: '#5C3A21', textAlign: 'center' }}>Attendance / Time In</th>
-                      <th style={{ padding: '14px 20px', fontSize: '14px', fontWeight: 800, color: '#5C3A21', textAlign: 'center' }}>Status</th>
-                      <th style={{ padding: '14px 20px', fontSize: '14px', fontWeight: 800, color: '#2E7D32', textAlign: 'center', backgroundColor: '#F4F9F4' }}>Worked Hours</th>
+                    <tr style={{ backgroundColor: 'var(--px-card)', borderBottom: '3px dashed var(--px-pink)' }}>
+                      <th style={{ padding: '14px 20px', fontSize: '14px', fontWeight: 800, color: 'var(--px-accent)', textAlign: 'center' }}>Shift Date ({attMonthName} {attYear})</th>
+                      <th style={{ padding: '14px 20px', fontSize: '14px', fontWeight: 800, color: 'var(--ink)', textAlign: 'center' }}>Day</th>
+                      <th style={{ padding: '14px 20px', fontSize: '14px', fontWeight: 800, color: 'var(--ink)', textAlign: 'center' }}>Attendance / Time In</th>
+                      <th style={{ padding: '14px 20px', fontSize: '14px', fontWeight: 800, color: 'var(--ink)', textAlign: 'center' }}>Status</th>
+                      <th style={{ padding: '14px 20px', fontSize: '14px', fontWeight: 800, color: 'var(--px-green-d)', textAlign: 'center', backgroundColor: 'var(--px-mint-lt)' }}>Worked Hours</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1917,33 +1859,18 @@ export default function App() {
                       const currentStatus = record.status || '-';
 
                       let activeWorkedHours = 0;
-                      let statusBgColor = '#FFF9E6';
-                      let statusTextColor = '#C68B59';
+                      let statusBgColor = 'var(--px-card)';
+                      let statusTextColor = 'var(--px-accent)';
 
-                      if (currentStatus === 'Present') {
-                        activeWorkedHours = 8;
-                        statusBgColor = '#C8E6C9';
-                        statusTextColor = '#2E7D32';
-                      } else if (currentStatus === 'Late') {
-                        activeWorkedHours = 8;
-                        statusBgColor = '#FFF9C4';
-                        statusTextColor = '#F57F17';
-                      } else if (currentStatus === 'Holiday' || currentStatus === 'Leave') {
-                        statusBgColor = '#D7CCC8';
-                        statusTextColor = '#4E342E';
-                      } else if (currentStatus === 'Out of Shift') {
-                        statusBgColor = '#FFECB3';
-                        statusTextColor = '#E65100';
-                      }
+                      if (currentStatus === 'Present') { activeWorkedHours = 8; statusBgColor = 'var(--px-mint)'; statusTextColor = 'var(--px-green-d)'; } 
+                      else if (currentStatus === 'Late') { activeWorkedHours = 8; statusBgColor = '#FFF2A8'; statusTextColor = '#8A5A00'; } 
+                      else if (currentStatus === 'Holiday' || currentStatus === 'Leave') { statusBgColor = '#DCCBFF'; statusTextColor = '#4B2E83'; } 
+                      else if (currentStatus === 'Out of Shift') { statusBgColor = '#FFD9B0'; statusTextColor = '#A14A00'; }
 
                       return (
                         <tr key={dateKey} style={{ borderBottom: '1px solid rgba(255,255,255,0.6)', backgroundColor: i % 2 === 0 ? 'rgba(255,255,255,0.4)' : 'transparent' }}>
-                          <td style={{ padding: '12px 20px', fontSize: '14px', fontWeight: 800, color: '#5C3A21', textAlign: 'center' }}>
-                            {attMonthName} {dayNum}, {attYear}
-                          </td>
-                          <td style={{ padding: '12px 20px', fontSize: '14px', fontWeight: 700, color: '#5C3A21', textAlign: 'center' }}>
-                            {dayOfWeek}
-                          </td>
+                          <td style={{ padding: '12px 20px', fontSize: '14px', fontWeight: 800, color: 'var(--ink)', textAlign: 'center' }}>{attMonthName} {dayNum}, {attYear}</td>
+                          <td style={{ padding: '12px 20px', fontSize: '14px', fontWeight: 700, color: 'var(--ink)', textAlign: 'center' }}>{dayOfWeek}</td>
                           <td style={{ padding: '12px 20px', textAlign: 'center' }}>
                             <button
                               onClick={() => {
@@ -1956,34 +1883,14 @@ export default function App() {
                                   [dateKey]: { ...record, timedIn: newTimedIn, time: timeString, status: evalStatus }
                                 }));
                               }}
-                              style={{
-                                borderRadius: '9999px',
-                                padding: '8px 16px',
-                                cursor: 'pointer',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '8px',
-                                fontWeight: 800,
-                                fontSize: '13px',
-                                backgroundColor: isTimedIn ? '#FFF9E6' : 'rgba(255,255,255,0.8)',
-                                color: isTimedIn ? '#2E7D32' : '#C68B59',
-                                boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
-                              }}
+                              style={{ borderRadius: 0, '--px': 'pill', padding: '8px 16px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '8px', fontWeight: 800, fontSize: '13px', backgroundColor: isTimedIn ? 'var(--px-card)' : 'rgba(255,255,255,0.8)', color: isTimedIn ? 'var(--px-green-d)' : 'var(--px-accent)', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}
                             >
-                              <Star style={{ width: '18px', height: '18px', color: isTimedIn ? '#FFD700' : '#DFB15B', fill: isTimedIn ? '#FFD700' : 'none' }} />
+                              <Star style={{ width: '18px', height: '18px', color: isTimedIn ? '#FFD700' : 'var(--px-pink)', fill: isTimedIn ? '#FFD700' : 'none' }} />
                               {isTimedIn ? `Timed In (${record.time || 'Manual'})` : 'Click to Time In'}
                             </button>
                           </td>
                           <td style={{ padding: '12px 20px', textAlign: 'center' }}>
-                            <select
-                              value={currentStatus}
-                              onChange={(e) => handleUpdateDayStatus(dateKey, 'status', e.target.value)}
-                              className="cutesy-dropdown"
-                              style={{
-                                backgroundColor: statusBgColor,
-                                color: statusTextColor
-                              }}
-                            >
+                            <select value={currentStatus} onChange={(e) => handleUpdateDayStatus(dateKey, 'status', e.target.value)} className="cutesy-dropdown" style={{ backgroundColor: statusBgColor, color: statusTextColor }}>
                               <option value="-">-</option>
                               <option value="Present">Present</option>
                               <option value="Late">Late</option>
@@ -1992,7 +1899,7 @@ export default function App() {
                               <option value="Leave">Leave</option>
                             </select>
                           </td>
-                          <td style={{ padding: '12px 20px', fontSize: '15px', fontWeight: 800, textAlign: 'center', backgroundColor: 'rgba(255,255,255,0.5)', color: activeWorkedHours > 0 ? '#2E7D32' : '#8C7A6B' }}>
+                          <td style={{ padding: '12px 20px', fontSize: '15px', fontWeight: 800, textAlign: 'center', backgroundColor: 'rgba(255,255,255,0.5)', color: activeWorkedHours > 0 ? 'var(--px-green-d)' : 'var(--px-muted)' }}>
                             {activeWorkedHours}
                           </td>
                         </tr>
@@ -2003,7 +1910,6 @@ export default function App() {
               </div>
             </div>
           )}
-
         </div>
       </div>
     </>
