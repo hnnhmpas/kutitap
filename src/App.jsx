@@ -84,48 +84,97 @@ const LOAN_HEAD_H = 46;
 const LOAN_COL_W = 140;
 
 // Firebase-backed state hook (syncs live to Firestore document)
+// - valueRef always holds the newest value, so quick back-to-back updates never build on a stale copy
+// - updates made before the first snapshot arrives are queued and applied ON TOP of the loaded data
+//   (previously they were written over it, which wiped saved entries such as November's Actual Income)
+// - echoes of our own pending writes are ignored, so typing/toggling never gets overwritten by an older copy
 function useFirebaseSync(key, initialValue) {
   const [storedValue, setStoredValue] = useState(initialValue);
   const [isLoaded, setIsLoaded] = useState(false);
+  const valueRef = useRef(initialValue);
+  const loadedRef = useRef(false);
+  const pendingRef = useRef([]);
 
-  useEffect(() => {
-    const docRef = doc(db, "financeTracker", "user_data");
-    const unsubscribe = onSnapshot(docRef, (docSnap) => {
-      if (docSnap.exists() && docSnap.data()[key] !== undefined) {
-        setStoredValue(docSnap.data()[key]);
-      } else {
-        try {
-          const item = window.localStorage.getItem(key);
-          if (item) setStoredValue(JSON.parse(item));
-        } catch (e) {}
-      }
-      setIsLoaded(true);
-    }, (error) => {
-      console.warn("Firestore sync fallback to local storage:", error);
-      try {
-        const item = window.localStorage.getItem(key);
-        if (item) setStoredValue(JSON.parse(item));
-      } catch (e) {}
-      setIsLoaded(true);
-    });
-
-    return () => unsubscribe();
-  }, [key]);
-
-  const setValue = async (value) => {
+  const persist = async (valueToStore) => {
     try {
-      const valueToStore = value instanceof Function ? value(storedValue) : value;
-      setStoredValue(valueToStore);
-      
       if (typeof window !== "undefined") {
         window.localStorage.setItem(key, JSON.stringify(valueToStore));
       }
-
       const docRef = doc(db, "financeTracker", "user_data");
       await setDoc(docRef, { [key]: valueToStore }, { merge: true });
     } catch (error) {
       console.warn("Error updating Firebase/LocalStorage", error);
     }
+  };
+
+  const applyUpdate = (update) => {
+    const valueToStore = update instanceof Function ? update(valueRef.current) : update;
+    valueRef.current = valueToStore;
+    setStoredValue(valueToStore);
+    return valueToStore;
+  };
+
+  useEffect(() => {
+    const docRef = doc(db, "financeTracker", "user_data");
+
+    const loadFromLocal = () => {
+      try {
+        const item = window.localStorage.getItem(key);
+        if (item) {
+          valueRef.current = JSON.parse(item);
+          setStoredValue(valueRef.current);
+        }
+      } catch (e) {}
+    };
+
+    const finishLoad = () => {
+      if (!loadedRef.current) {
+        loadedRef.current = true;
+        const pending = pendingRef.current;
+        pendingRef.current = [];
+        if (pending.length > 0) {
+          const before = valueRef.current;
+          let last = before;
+          pending.forEach((update) => { last = applyUpdate(update); });
+          if (last !== before) persist(last);
+        }
+      }
+      setIsLoaded(true);
+    };
+
+    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+      // our own write echoing back: local state is already up to date
+      if (loadedRef.current && docSnap.metadata && docSnap.metadata.hasPendingWrites) return;
+      if (docSnap.exists() && docSnap.data()[key] !== undefined) {
+        valueRef.current = docSnap.data()[key];
+        setStoredValue(docSnap.data()[key]);
+      } else {
+        loadFromLocal();
+      }
+      finishLoad();
+    }, (error) => {
+      console.warn("Firestore sync fallback to local storage:", error);
+      loadFromLocal();
+      finishLoad();
+    });
+
+    // safety net: if Firestore never answers, fall back to this device's copy so the app stays usable
+    const fallbackTimer = setTimeout(() => {
+      if (!loadedRef.current) { loadFromLocal(); finishLoad(); }
+    }, 4000);
+
+    return () => { clearTimeout(fallbackTimer); unsubscribe(); };
+  }, [key]);
+
+  const setValue = async (value) => {
+    if (!loadedRef.current) {
+      pendingRef.current.push(value);
+      return;
+    }
+    const before = valueRef.current;
+    const valueToStore = applyUpdate(value);
+    if (valueToStore === before && value instanceof Function) return; // nothing changed, nothing to save
+    await persist(valueToStore);
   };
 
   return [storedValue, setValue];
@@ -746,7 +795,11 @@ export default function App() {
     'Meralco': { amount: '', paid: false },
     'Maynilad': { amount: '', paid: false }
   };
-  const currentUtilityBills = utilityBills[currentKey] || defaultUtilities;
+  const utilityOrder = Object.keys(defaultUtilities);
+  const utilityRank = (name) => { const i = utilityOrder.indexOf(name); return i === -1 ? utilityOrder.length : i; };
+  const currentUtilityBills = Object.fromEntries(
+    Object.entries(utilityBills[currentKey] || defaultUtilities).sort(([a], [b]) => utilityRank(a) - utilityRank(b))
+  );
 
   const handleUtilityAmountChange = (billName, value) => {
     setUtilityBills(prev => ({
@@ -768,7 +821,10 @@ export default function App() {
     }));
   };
 
-  const loanCategories = ['SPayLater', 'SLoan', 'Billease', 'Maya', 'Atome', 'TikTokPayLater'];
+  // 'Atome' is the key of the existing entries (now shown as "Home Credit"); 'AtomeNew' is the new Atome tab
+  const loanCategories = ['SPayLater', 'SLoan', 'Billease', 'Maya', 'Atome', 'AtomeNew', 'TikTokPayLater'];
+  const loanLabels = { Atome: 'Home Credit', AtomeNew: 'Atome' };
+  const loanLabel = (cat) => loanLabels[cat] || cat;
   const [activeLoanCategory, setActiveLoanCategory] = useState('SPayLater');
   
   const [dashMonthIndex, setDashMonthIndex] = useState(() => new Date().getMonth());
@@ -792,9 +848,12 @@ export default function App() {
     'Billease': { columns: ['Installment 1', 'Installment 2'], cells: {}, paidStatus: {} },
     'Maya': { columns: ['Credit', 'PayLater'], cells: {}, paidStatus: {} },
     'Atome': { columns: ['Bills', 'Card'], cells: {}, paidStatus: {} },
+    'AtomeNew': { columns: ['Bills', 'Card'], cells: {}, paidStatus: {} },
     'TikTokPayLater': { columns: ['Orders'], cells: {}, paidStatus: {} }
   };
   const [loanTableData, setLoanTableData] = useFirebaseSync('kutitap_loans', initialLoanData);
+  // a sub-tab that isn't in the saved data yet (e.g. the new Atome tab) starts from its defaults
+  const getLoanCat = (cat) => loanTableData[cat] || initialLoanData[cat] || { columns: [], cells: {}, paidStatus: {} };
 
   const [isAddColumnModalOpen, setIsAddColumnModalOpen] = useState(false);
   const [newColumnName, setNewColumnName] = useState('');
@@ -802,7 +861,7 @@ export default function App() {
   const handleCellChange = (category, year, month, cutoff, colName, value) => {
     const rowKey = `${year}-${month}-${cutoff}`;
     setLoanTableData(prev => {
-      const catData = prev[category] || { columns: [], cells: {}, paidStatus: {} };
+      const catData = prev[category] || initialLoanData[category] || { columns: [], cells: {}, paidStatus: {} };
       const rowCells = catData.cells[rowKey] || {};
       let paidCells = catData.paidCells;
       // an emptied entry has nothing left to pay, so drop its paid flag
@@ -826,7 +885,7 @@ export default function App() {
   const handleToggleCellPaid = (category, year, month, cutoff, colName) => {
     const rowKey = `${year}-${month}-${cutoff}`;
     setLoanTableData(prev => {
-      const catData = prev[category] || { columns: [], cells: {}, paidStatus: {} };
+      const catData = prev[category] || initialLoanData[category] || { columns: [], cells: {}, paidStatus: {} };
       if (!(parseFloat(catData.cells[rowKey]?.[colName]) || 0)) return prev;
       const paidCells = catData.paidCells || {};
       const rowPaid = paidCells[rowKey] || {};
@@ -873,7 +932,7 @@ export default function App() {
     }
     const colTrim = newColumnName.trim();
     setLoanTableData(prev => {
-      const catData = prev[activeLoanCategory];
+      const catData = prev[activeLoanCategory] || initialLoanData[activeLoanCategory];
       if (catData.columns.includes(colTrim)) {
         alert('Column already exists!');
         return prev;
@@ -890,7 +949,7 @@ export default function App() {
   const handleDeleteColumn = (colName) => {
     if (window.confirm(`Are you sure you want to delete column "${colName}"?`)) {
       setLoanTableData(prev => {
-        const catData = prev[activeLoanCategory];
+        const catData = prev[activeLoanCategory] || initialLoanData[activeLoanCategory];
         const updatedColumns = catData.columns.filter(c => c !== colName);
         
         const updatedCells = {};
@@ -927,6 +986,8 @@ export default function App() {
     const rowCells = catData?.cells?.[rowKey] || {};
     let total = 0, paid = 0, unpaid = 0;
     Object.entries(rowCells).forEach(([col, v]) => {
+      // amounts left behind by a deleted column are not on the table, so they must not be counted either
+      if (catData?.columns && !catData.columns.includes(col)) return;
       const n = parseFloat(v) || 0;
       if (n === 0) return;
       total += n;
@@ -946,7 +1007,7 @@ export default function App() {
       const r = getRowAmounts(catData, `${year}-${month}-${cutoff}`);
       if (r.total > 0) {
         hasEntries = true;
-        totalAmt += r.total;
+        totalAmt += r.unpaid; // paid entries are deducted: only what is still payable is shown
         if (!r.allPaid) isPaid = false;
       }
     });
@@ -1452,7 +1513,7 @@ export default function App() {
   const savingsTotalFromGoals = currentMonthSavingsItems.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
   const utilityItems = Object.values(currentUtilityBills);
   const obligationItems = [...utilityItems, ...currentMonthSavingsItems];
-  if (totalConsolidatedLoansAmt > 0) obligationItems.push({ paid: isConsolidatedLoansPaid });
+  // the Loans row has no Paid/Not Paid button, so it is not part of the paid percentage
 
   const utilityTotal = utilityItems.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
   const obligationTotal = utilityTotal + totalConsolidatedLoansAmt + savingsTotalFromGoals;
@@ -1487,9 +1548,7 @@ export default function App() {
         const catData = loanTableData[cat];
         if (catData) {
           const rKey = `${dashFilterYear}-${m}-${cutoff}`;
-          const rCells = catData.cells[rKey] || {};
-          const rTotal = Object.values(rCells).reduce((sum, v) => sum + (parseFloat(v) || 0), 0);
-          annualDuesSum += rTotal;
+          annualDuesSum += getRowAmounts(catData, rKey).total;
         }
       });
     });
@@ -1868,7 +1927,9 @@ export default function App() {
                             type="number"
                             placeholder="e.g. 50000"
                             value={currentIncome.expected === 0 || currentIncome.expected === '0' ? '' : currentIncome.expected}
-                            onChange={(e) => handleIncomeChange('expected', e.target.value)}
+                            readOnly
+                            tabIndex={-1}
+                            title="Auto-synced from the Attendance tab"
                             style={{ width: '100%', backgroundColor: '#FFFFFF', padding: '10px 14px', borderRadius: 0, '--px': 'pill', fontWeight: 800, fontSize: '15px', color: 'var(--ink)', textAlign: 'center' }}
                           />
                         </div>
@@ -1956,7 +2017,7 @@ export default function App() {
                         <div style={{ fontSize: '12px', fontWeight: 800, color: 'var(--ink)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Loans Cutoffs</div>
                         <span style={{ fontSize: '10px', fontWeight: 800, backgroundColor: 'var(--px-butter)', color: 'var(--px-accent)', padding: '2px 10px', borderRadius: 0, '--px': 'pill' }}>Auto-Synced</span>
                       </div>
-                      {totalConsolidatedLoansAmt === 0 ? (
+                      {!(current15Summary.hasEntries || current30Summary.hasEntries) ? (
                         <div style={{ fontSize: '12px', color: 'var(--px-muted)', fontStyle: 'italic', padding: '4px' }}>No loans due this month</div>
                       ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
@@ -2413,13 +2474,13 @@ export default function App() {
                     const isActive = activeLoanCategory === cat;
                     return (
                       <button key={cat} onClick={() => setActiveLoanCategory(cat)} style={{ padding: '10px 20px', borderRadius: 0, '--px': 'pill', fontWeight: 800, fontSize: '13px', cursor: 'pointer', backgroundColor: isActive ? 'var(--px-pink)' : '#FFFFFF', color: isActive ? '#FFFFFF' : 'var(--ink)', boxShadow: isActive ? '0 4px 15px rgba(223,177,91,0.4)' : '0 2px 8px rgba(0,0,0,0.04)' }}>
-                        {cat}
+                        {loanLabel(cat)}
                       </button>
                     );
                   })}
                 </div>
                 <button onClick={() => setIsAddColumnModalOpen(true)} style={{ backgroundColor: 'var(--px-pink)', color: '#FFFFFF', borderRadius: 0, '--px': 'pill', padding: '10px 20px', fontWeight: 800, fontSize: '13px', cursor: 'pointer', boxShadow: '0 4px 15px rgba(223,177,91,0.35)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Plus style={{ width: '16px', height: '16px' }} /> Add Column to {activeLoanCategory}
+                  <Plus style={{ width: '16px', height: '16px' }} /> Add Column to {loanLabel(activeLoanCategory)}
                 </button>
               </div>
 
@@ -2427,7 +2488,7 @@ export default function App() {
                 <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(92,58,33,0.3)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
                   <div style={{ backgroundColor: 'var(--px-card)', borderRadius: 0, '--px': 'panel', padding: '24px 28px', width: '100%', maxWidth: '420px', boxShadow: '0 20px 50px rgba(223,177,91,0.3)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px dashed var(--px-sun)', paddingBottom: '10px' }}>
-                      <div className="kutitap-title" style={{ fontSize: '16px', color: 'var(--px-accent)' }}>Add Column to {activeLoanCategory}</div>
+                      <div className="kutitap-title" style={{ fontSize: '16px', color: 'var(--px-accent)' }}>Add Column to {loanLabel(activeLoanCategory)}</div>
                       <button onClick={() => setIsAddColumnModalOpen(false)} style={{ backgroundColor: 'var(--px-butter)', borderRadius: 0, '--px': 'pill', width: '30px', height: '30px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--px-accent)', fontWeight: 800 }}><X style={{ width: '14px', height: '14px' }} /></button>
                     </div>
                     <div>
@@ -2447,17 +2508,17 @@ export default function App() {
               </div>
 
               <div style={{ backgroundColor: '#FFFFFF', borderRadius: 0, '--px': 'panel', overflow: 'auto', boxShadow: '0 8px 25px rgba(223,177,91,0.15)', flex: '1 1 auto', minHeight: '320px', maxHeight: 'calc(100vh - 80px)' }}>
-                <table className="px-sticky-table" style={{ width: '100%', textAlign: 'left', minWidth: `${140 + (loanTableData[activeLoanCategory]?.columns.length || 0) * LOAN_COL_W + 150}px` }}>
+                <table className="px-sticky-table" style={{ width: '100%', textAlign: 'left', minWidth: `${140 + getLoanCat(activeLoanCategory).columns.length * LOAN_COL_W + 150}px` }}>
                   <thead>
                     <tr>
                       <th style={{ position: 'sticky', top: 0, left: 0, zIndex: 5, height: `${LOAN_HEAD_H}px`, padding: '0 18px', fontSize: '13px', fontWeight: 800, color: 'var(--px-accent)', width: '140px', minWidth: '140px', textAlign: 'center', backgroundColor: 'var(--px-card)', borderBottom: '3px dashed var(--px-sun)' }}>Date / Cutoff ({loanTableYear})</th>
-                      <th style={{ position: 'sticky', top: 0, zIndex: 3, height: `${LOAN_HEAD_H}px`, padding: '0 18px', fontSize: '14px', fontWeight: 800, color: 'var(--px-accent)', textAlign: 'center', backgroundColor: 'var(--px-card)', borderBottom: '3px dashed var(--px-sun)' }} colSpan={(loanTableData[activeLoanCategory]?.columns.length || 0) + 1}>
-                        {activeLoanCategory} Table View
+                      <th style={{ position: 'sticky', top: 0, zIndex: 3, height: `${LOAN_HEAD_H}px`, padding: '0 18px', fontSize: '14px', fontWeight: 800, color: 'var(--px-accent)', textAlign: 'center', backgroundColor: 'var(--px-card)', borderBottom: '3px dashed var(--px-sun)' }} colSpan={getLoanCat(activeLoanCategory).columns.length + 1}>
+                        {loanLabel(activeLoanCategory)} Table View
                       </th>
                     </tr>
                     <tr>
                       <th style={{ position: 'sticky', top: `${LOAN_HEAD_H}px`, left: 0, zIndex: 5, padding: '10px 18px', fontSize: '12px', fontWeight: 800, color: 'var(--ink)', textAlign: 'center', backgroundColor: 'var(--px-butter)', borderBottom: '2px solid var(--px-sun)', borderRight: '3px solid var(--px-sun)' }}>Cutoff</th>
-                      {loanTableData[activeLoanCategory]?.columns.map(col => (
+                      {getLoanCat(activeLoanCategory).columns.map(col => (
                         <th key={col} style={{ position: 'sticky', top: `${LOAN_HEAD_H}px`, zIndex: 3, minWidth: `${LOAN_COL_W}px`, padding: '10px 14px', fontSize: '12px', fontWeight: 800, color: 'var(--ink)', textAlign: 'center', backgroundColor: 'var(--px-butter)', borderBottom: '2px solid var(--px-sun)' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '6px' }}>
                             <span style={{ flex: 1, textAlign: 'center' }}>{col}</span>
@@ -2474,7 +2535,7 @@ export default function App() {
                       { month: m, cutoff: '30th', label: `${m.slice(0, 3)} ${getCutoff30Label(m, loanTableYear)}` }
                     ]).map((row, idx) => {
                       const rowKey = `${loanTableYear}-${row.month}-${row.cutoff}`;
-                      const catData = loanTableData[activeLoanCategory] || { columns: [], cells: {}, paidStatus: {} };
+                      const catData = getLoanCat(activeLoanCategory);
                       const rowValues = catData.cells[rowKey] || {};
                       const rowAmt = getRowAmounts(catData, rowKey);
                       const cellBorder = '2px solid rgba(74,29,54,0.15)';
@@ -2516,6 +2577,27 @@ export default function App() {
                       );
                     })}
                   </tbody>
+                  <tfoot>
+                    {(() => {
+                      const grandCat = getLoanCat(activeLoanCategory);
+                      let gTotal = 0, gPaid = 0, gUnpaid = 0;
+                      months.forEach(m => ['15th', '30th'].forEach(c => {
+                        const r = getRowAmounts(grandCat, `${loanTableYear}-${m}-${c}`);
+                        gTotal += r.total; gPaid += r.paid; gUnpaid += r.unpaid;
+                      }));
+                      const foot = { position: 'sticky', bottom: 0, zIndex: 4, padding: '12px 14px', fontWeight: 800, borderTop: '3px solid var(--ink)' };
+                      return (
+                        <tr>
+                          <td style={{ ...foot, left: 0, zIndex: 6, textAlign: 'center', fontSize: '12px', color: '#FFFFFF', backgroundColor: 'var(--px-pink)', textShadow: '2px 2px 0 var(--ink)' }}>Grand Total {loanTableYear}</td>
+                          {grandCat.columns.length > 0 && <td colSpan={grandCat.columns.length} style={{ ...foot, backgroundColor: 'var(--px-pink)' }} />}
+                          <td style={{ ...foot, textAlign: 'center', fontSize: '15px', color: 'var(--px-green-d)', backgroundColor: 'var(--px-mint)' }}>
+                            ₱{gUnpaid.toLocaleString()}
+                            {gPaid > 0 && <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--px-muted)' }}>of ₱{gTotal.toLocaleString()}</div>}
+                          </td>
+                        </tr>
+                      );
+                    })()}
+                  </tfoot>
                 </table>
               </div>
             </div>

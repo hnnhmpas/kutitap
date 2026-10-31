@@ -297,3 +297,11 @@ button[style*="var(--px-mint)"]::before { content: '★ '; color: #f5a400; text-
 @keyframes px-float { 0% { transform: translateY(0); opacity: 0; } 15% { opacity: 1; } 100% { transform: translateY(-80px); opacity: 0; } }
 @keyframes px-breathe { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
 @keyframes px-zzz { 0% { transform: translate(0, 0); opacity: 0; } 20% { opacity: 1; } 100% { transform: translate(10px, -26px); opacity: 0; } }
+
+
+/* ===== v3: locked (auto-synced) fields + pinned grand total ===== */
+.px-root input[readonly] { cursor: not-allowed; }
+.px-root input[readonly][style*="--px"], .px-root input[readonly][style*="--px"]:focus {
+  background-color: var(--px-butter) !important; border-color: var(--ink) !important; animation: none; color: var(--px-muted) !important;
+}
+.px-root table.px-sticky-table tfoot td { border: 0; box-shadow: 0 -4px 0 rgba(74, 29, 54, 0.18); }
