@@ -21,6 +21,7 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   FileText,
+  Pencil,
   Volume2,
   VolumeX
 } from 'lucide-react';
@@ -52,6 +53,10 @@ const NAV_SPRITES = {
 const Sprite = ({ src, className = '' }) => (
   <img src={src} alt="" draggable={false} className={`px-sprite ${className}`} />
 );
+
+// Loans table sizing (sticky header height + minimum width of each amount column)
+const LOAN_HEAD_H = 46;
+const LOAN_COL_W = 140;
 
 // Firebase-backed state hook (syncs live to Firestore document)
 function useFirebaseSync(key, initialValue) {
@@ -166,6 +171,17 @@ function PixelFX() {
         burst(e.clientX, e.clientY, 6, ['#f0589a', '#ffd86b', '#9be58a']);
       }
     };
+    const onDbl = (e) => {
+      const el = e.target.closest && e.target.closest('[data-paid]');
+      if (!el) return;
+      if (el.getAttribute('data-paid') === 'true') {
+        tone([[330, 0.08], [220, 0.12]]);
+        burst(e.clientX, e.clientY, 4, ['#8a5a74', '#ffe9a8']);
+      } else {
+        tone([[660, 0.06], [880, 0.06], [1320, 0.14]]);
+        burst(e.clientX, e.clientY, 12, ['#ffd86b', '#9be58a', '#f0589a']);
+      }
+    };
     let lastKey = 0;
     const onInput = (e) => {
       const now = performance.now();
@@ -175,9 +191,11 @@ function PixelFX() {
     };
     document.addEventListener('pointerdown', onDown, true);
     document.addEventListener('input', onInput, true);
+    document.addEventListener('dblclick', onDbl, true);
     return () => {
       document.removeEventListener('pointerdown', onDown, true);
       document.removeEventListener('input', onInput, true);
+      document.removeEventListener('dblclick', onDbl, true);
     };
   }, []);
 
@@ -307,53 +325,67 @@ export default function App() {
     setLoanTableData(prev => {
       const catData = prev[category] || { columns: [], cells: {}, paidStatus: {} };
       const rowCells = catData.cells[rowKey] || {};
+      let paidCells = catData.paidCells;
+      // an emptied entry has nothing left to pay, so drop its paid flag
+      if (!(parseFloat(value) || 0) && paidCells?.[rowKey]?.[colName]) {
+        const restRow = { ...paidCells[rowKey] };
+        delete restRow[colName];
+        paidCells = { ...paidCells, [rowKey]: restRow };
+      }
       return {
         ...prev,
         [category]: {
           ...catData,
+          ...(paidCells ? { paidCells } : {}),
           cells: { ...catData.cells, [rowKey]: { ...rowCells, [colName]: value } }
         }
       };
     });
   };
 
-  const handleToggleLoanPaid = (category, year, month, cutoff) => {
+  // Paid / unpaid is now tracked per entry (cell): paidCells[rowKey][colName] = true
+  const handleToggleCellPaid = (category, year, month, cutoff, colName) => {
     const rowKey = `${year}-${month}-${cutoff}`;
     setLoanTableData(prev => {
       const catData = prev[category] || { columns: [], cells: {}, paidStatus: {} };
-      const currentStatus = !!catData.paidStatus[rowKey];
+      if (!(parseFloat(catData.cells[rowKey]?.[colName]) || 0)) return prev;
+      const paidCells = catData.paidCells || {};
+      const rowPaid = paidCells[rowKey] || {};
       return {
         ...prev,
         [category]: {
           ...catData,
-          paidStatus: { ...catData.paidStatus, [rowKey]: !currentStatus }
+          paidCells: { ...paidCells, [rowKey]: { ...rowPaid, [colName]: !rowPaid[colName] } }
         }
       };
     });
   };
 
-  const handleToggleCutoffPaidGlobal = (year, month, cutoff) => {
-    const rowKey = `${year}-${month}-${cutoff}`;
+  // Old data marked a whole row as paid. Convert that once into per-entry paid flags.
+  useEffect(() => {
+    const hasLegacy = loanCategories.some(cat => Object.values(loanTableData[cat]?.paidStatus || {}).some(Boolean));
+    if (!hasLegacy) return;
     setLoanTableData(prev => {
-      const updatedPrev = { ...prev };
-      let anyUnpaid = false;
+      const next = { ...prev };
       loanCategories.forEach(cat => {
-        const catData = updatedPrev[cat];
-        if (catData && !catData.paidStatus[rowKey]) anyUnpaid = true;
+        const catData = prev[cat];
+        if (!catData || !catData.paidStatus) return;
+        const paidCells = { ...(catData.paidCells || {}) };
+        const paidStatus = { ...catData.paidStatus };
+        Object.keys(paidStatus).forEach(rowKey => {
+          if (!paidStatus[rowKey]) return;
+          const rowPaid = { ...(paidCells[rowKey] || {}) };
+          Object.entries(catData.cells?.[rowKey] || {}).forEach(([col, v]) => {
+            if ((parseFloat(v) || 0) !== 0 && rowPaid[col] === undefined) rowPaid[col] = true;
+          });
+          paidCells[rowKey] = rowPaid;
+          delete paidStatus[rowKey];
+        });
+        next[cat] = { ...catData, paidCells, paidStatus };
       });
-      const newTargetStatus = anyUnpaid;
-      loanCategories.forEach(cat => {
-        const catData = updatedPrev[cat];
-        if (catData) {
-          updatedPrev[cat] = {
-            ...catData,
-            paidStatus: { ...catData.paidStatus, [rowKey]: newTargetStatus }
-          };
-        }
-      });
-      return updatedPrev;
+      return next;
     });
-  };
+  }, [loanTableData]);
 
   const handleAddColumn = () => {
     if (!newColumnName.trim()) {
@@ -391,16 +423,37 @@ export default function App() {
           }
         });
 
+        const updatedPaidCells = {};
+        Object.entries(catData.paidCells || {}).forEach(([rowKey, rowPaid]) => {
+          const newRowPaid = { ...rowPaid };
+          delete newRowPaid[colName];
+          updatedPaidCells[rowKey] = newRowPaid;
+        });
+
         return {
           ...prev,
           [activeLoanCategory]: {
             ...catData,
             columns: updatedColumns,
-            cells: updatedCells
+            cells: updatedCells,
+            paidCells: updatedPaidCells
           }
         };
       });
     }
+  };
+
+  // Amounts of one category row: total, paid part, unpaid part (paid entries are deducted from the row total)
+  const getRowAmounts = (catData, rowKey) => {
+    const rowCells = catData?.cells?.[rowKey] || {};
+    let total = 0, paid = 0, unpaid = 0;
+    Object.entries(rowCells).forEach(([col, v]) => {
+      const n = parseFloat(v) || 0;
+      if (n === 0) return;
+      total += n;
+      if (catData?.paidCells?.[rowKey]?.[col]) paid += n; else unpaid += n;
+    });
+    return { total, paid, unpaid, allPaid: unpaid === 0 };
   };
 
   const getCutoffSummary = (month, year, cutoff) => {
@@ -411,13 +464,11 @@ export default function App() {
     loanCategories.forEach(cat => {
       const catData = loanTableData[cat];
       if (!catData) return;
-      const rowKey = `${year}-${month}-${cutoff}`;
-      const rowCells = catData.cells[rowKey] || {};
-      const catRowTotal = Object.values(rowCells).reduce((sum, v) => sum + (parseFloat(v) || 0), 0);
-      if (catRowTotal > 0) {
+      const r = getRowAmounts(catData, `${year}-${month}-${cutoff}`);
+      if (r.total > 0) {
         hasEntries = true;
-        totalAmt += catRowTotal;
-        if (!catData.paidStatus[rowKey]) isPaid = false;
+        totalAmt += r.total;
+        if (!r.allPaid) isPaid = false;
       }
     });
 
@@ -444,28 +495,16 @@ export default function App() {
 
   months.forEach(m => {
     ['15th', '30th'].forEach(cutoff => {
-      let cutoffSum = 0;
-      let cutoffPaid = true;
-      let cutoffHasEntries = false;
-
       loanCategories.forEach(cat => {
         const catData = loanTableData[cat];
         if (!catData) return;
-        const rowKey = `${loanTableYear}-${m}-${cutoff}`;
-        const rowCells = catData.cells[rowKey] || {};
-        const catRowTotal = Object.values(rowCells).reduce((sum, v) => sum + (parseFloat(v) || 0), 0);
-        if (catRowTotal > 0) {
-          cutoffHasEntries = true;
-          cutoffSum += catRowTotal;
-          if (!catData.paidStatus[rowKey]) cutoffPaid = false;
+        const r = getRowAmounts(catData, `${loanTableYear}-${m}-${cutoff}`);
+        if (r.total > 0) {
+          yearTotalCost += r.total;
+          yearTotalPaid += r.paid;
+          yearTotalUnpaid += r.unpaid;
         }
       });
-
-      if (cutoffHasEntries) {
-        yearTotalCost += cutoffSum;
-        if (cutoffPaid) yearTotalPaid += cutoffSum;
-        else yearTotalUnpaid += cutoffSum;
-      }
     });
   });
 
@@ -522,10 +561,110 @@ export default function App() {
 
   const handleDeleteGoal = (id) => setSavingsGoals(prev => prev.filter(g => g.id !== id));
 
+  // Edit an existing goal
+  const [editingGoalId, setEditingGoalId] = useState(null);
+  const [editGoalName, setEditGoalName] = useState('');
+  const [editGoalAmount, setEditGoalAmount] = useState('');
+  const [editStartMonthIndex, setEditStartMonthIndex] = useState(0);
+  const [editStartYear, setEditStartYear] = useState(2026);
+  const [editEndMonthIndex, setEditEndMonthIndex] = useState(0);
+  const [editEndYear, setEditEndYear] = useState(2026);
+
+  const parseMonthKey = (key) => {
+    const [mName, yStr] = (key || '').split('-');
+    return { monthIndex: Math.max(0, months.indexOf(mName)), year: parseInt(yStr) || 2026 };
+  };
+
+  const handleOpenEditGoal = (goal) => {
+    const first = parseMonthKey(goal.monthsList[0]?.monthKey);
+    const last = parseMonthKey(goal.monthsList[goal.monthsList.length - 1]?.monthKey);
+    setEditingGoalId(goal.id);
+    setEditGoalName(goal.name);
+    setEditGoalAmount(String(goal.goalAmount ?? ''));
+    setEditStartMonthIndex(first.monthIndex);
+    setEditStartYear(first.year);
+    setEditEndMonthIndex(last.monthIndex);
+    setEditEndYear(last.year);
+  };
+
+  const handleSaveEditedGoal = () => {
+    const goal = savingsGoals.find(g => g.id === editingGoalId);
+    if (!goal) { setEditingGoalId(null); return; }
+    if (!editGoalName.trim() || !editGoalAmount) {
+      alert('Please enter a valid goal name and amount.');
+      return;
+    }
+    const totalAmt = parseFloat(editGoalAmount) || 0;
+    const startIndex = editStartYear * 12 + editStartMonthIndex;
+    const endIndex = editEndYear * 12 + editEndMonthIndex;
+    const diffMonths = endIndex >= startIndex ? (endIndex - startIndex + 1) : 1;
+
+    const newKeys = [];
+    let currM = editStartMonthIndex;
+    let currY = editStartYear;
+    for (let i = 0; i < diffMonths; i++) {
+      newKeys.push(`${months[currM]}-${currY}`);
+      currM++;
+      if (currM > 11) { currM = 0; currY++; }
+    }
+
+    const oldKeys = goal.monthsList.map(m => m.monthKey);
+    const scheduleUnchanged = totalAmt === goal.goalAmount && newKeys.length === oldKeys.length && newKeys.every((k, i) => k === oldKeys[i]);
+
+    let updatedGoal;
+    if (scheduleUnchanged) {
+      // only the name changed: leave the schedule (and any manual amounts) alone
+      updatedGoal = { ...goal, name: editGoalName.trim() };
+    } else {
+      const paidByKey = {};
+      goal.monthsList.forEach(m => { if (m.paid) paidByKey[m.monthKey] = m; });
+      const droppedPaid = Object.keys(paidByKey).filter(k => !newKeys.includes(k));
+      if (droppedPaid.length > 0 && !window.confirm(`${droppedPaid.length} month(s) already marked Paid fall outside the new dates and will be removed from this goal. Continue?`)) {
+        return;
+      }
+      // months already paid keep their amount; the rest of the goal is spread over the unpaid months
+      const keptPaidTotal = newKeys.reduce((sum, k) => sum + (paidByKey[k] ? (parseFloat(paidByKey[k].amount) || 0) : 0), 0);
+      const unpaidKeys = newKeys.filter(k => !paidByKey[k]);
+      const remaining = Math.max(0, totalAmt - keptPaidTotal);
+      const each = unpaidKeys.length > 0 ? Math.round(remaining / unpaidKeys.length) : 0;
+      let seen = 0;
+      const monthsList = newKeys.map(k => {
+        if (paidByKey[k]) return { ...paidByKey[k] };
+        seen++;
+        const amount = seen === unpaidKeys.length ? remaining - each * (unpaidKeys.length - 1) : each;
+        return { monthKey: k, amount: Math.max(0, amount), paid: false };
+      });
+      updatedGoal = {
+        ...goal,
+        name: editGoalName.trim(),
+        goalAmount: totalAmt,
+        startMonth: months[editStartMonthIndex],
+        startYear: editStartYear,
+        endMonth: months[editEndMonthIndex],
+        endYear: editEndYear,
+        monthsList
+      };
+    }
+    setSavingsGoals(prev => prev.map(g => (g.id === editingGoalId ? updatedGoal : g)));
+    setEditingGoalId(null);
+  };
+
+  // Auto-compute on (default): changing one month re-spreads the rest. Off: only that month changes.
+  const handleToggleGoalAutoCompute = (goalId) => {
+    setSavingsGoals(prev => prev.map(g => (g.id === goalId ? { ...g, autoCompute: g.autoCompute === false } : g)));
+  };
+
   const handleGoalMonthAmountChange = (goalId, monthKey, value) => {
     setSavingsGoals(prev => prev.map(goal => {
       if (goal.id !== goalId) return goal;
       const numericVal = value === '' ? 0 : parseFloat(value) || 0;
+
+      if (goal.autoCompute === false) {
+        return {
+          ...goal,
+          monthsList: goal.monthsList.map(m => (m.monthKey === monthKey ? { ...m, amount: value === '' ? '' : numericVal } : m))
+        };
+      }
       const totalGoal = goal.goalAmount || 0;
 
       const newMonthsList = goal.monthsList.map(m => {
@@ -719,7 +858,10 @@ export default function App() {
   const estimatedSalaryPHP = Math.round(totalWorkedHours * 7.50 * displayRate);
 
   useEffect(() => {
-    const targetKey = `${months[attMonthIndex]}-${attYear}`;
+    // Salary earned this month is paid next month, so it becomes next month's Expected Income
+    const nextMonthIndex = (attMonthIndex + 1) % 12;
+    const nextMonthYear = attMonthIndex === 11 ? attYear + 1 : attYear;
+    const targetKey = `${months[nextMonthIndex]}-${nextMonthYear}`;
     setIncomes(prev => {
       const existing = prev[targetKey] || { expected: '', actual: '' };
       if (existing.expected === String(estimatedSalaryPHP)) return prev;
@@ -1333,12 +1475,7 @@ export default function App() {
                             <div style={{ width: '100%', backgroundColor: 'var(--px-paper)', padding: '6px 8px', borderRadius: 0, '--px': 'pill', fontWeight: 700, fontSize: '13px', color: 'var(--px-muted)', textAlign: 'center' }}>
                               ₱{parseFloat(totalConsolidatedLoansAmt || 0).toLocaleString()}
                             </div>
-                            <button
-                              onClick={() => { ['15th', '30th'].forEach(cKey => handleToggleCutoffPaidGlobal(currentYear, currentMonthName, cKey)); }}
-                              style={{ padding: '6px 10px', borderRadius: 0, '--px': 'pill', fontWeight: 800, fontSize: '11px', cursor: 'pointer', textAlign: 'center', width: '100%', backgroundColor: isConsolidatedLoansPaid ? 'var(--px-mint)' : 'var(--px-butter)', color: isConsolidatedLoansPaid ? 'var(--px-green-d)' : 'var(--px-accent)' }}
-                            >
-                              {isConsolidatedLoansPaid ? 'Paid' : 'Not Paid'}
-                            </button>
+                            <div />
                           </div>
                         </div>
                       )}
@@ -1532,6 +1669,69 @@ export default function App() {
                 </div>
               )}
 
+              {editingGoalId !== null && (
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(92,58,33,0.3)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+                  <div style={{ backgroundColor: 'var(--px-card)', borderRadius: 0, '--px': 'panel', padding: '24px 30px', width: '100%', maxWidth: '520px', boxShadow: '0 25px 50px rgba(223,177,91,0.3)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px dashed var(--px-sun)', paddingBottom: '12px' }}>
+                      <div className="kutitap-title" style={{ fontSize: '18px', color: 'var(--px-accent)' }}>Edit Savings Goal</div>
+                      <button onClick={() => setEditingGoalId(null)} style={{ backgroundColor: 'var(--px-butter)', borderRadius: 0, '--px': 'pill', width: '34px', height: '34px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--px-accent)', fontWeight: 800 }}><X style={{ width: '16px', height: '16px' }} /></button>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <div>
+                        <label style={{ fontSize: '12px', fontWeight: 800, color: 'var(--ink)', display: 'block', marginBottom: '4px' }}>Savings Goal Name</label>
+                        <input
+                          type="text"
+                          value={editGoalName}
+                          onChange={(e) => setEditGoalName(e.target.value)}
+                          style={{ width: '100%', backgroundColor: '#FFFFFF', padding: '12px 16px', borderRadius: 0, '--px': 'pill', fontWeight: 700, fontSize: '13px', color: 'var(--ink)' }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: '12px', fontWeight: 800, color: 'var(--ink)', display: 'block', marginBottom: '4px' }}>Goal Amount (₱)</label>
+                        <input
+                          type="number"
+                          value={editGoalAmount}
+                          onChange={(e) => setEditGoalAmount(e.target.value)}
+                          style={{ width: '100%', backgroundColor: '#FFFFFF', padding: '12px 16px', borderRadius: 0, '--px': 'pill', fontWeight: 700, fontSize: '13px', color: 'var(--ink)' }}
+                        />
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                        <div>
+                          <label style={{ fontSize: '12px', fontWeight: 800, color: 'var(--ink)', display: 'block', marginBottom: '4px' }}>Start Date</label>
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            <select value={editStartMonthIndex} onChange={(e) => setEditStartMonthIndex(parseInt(e.target.value))} style={{ flex: 1, backgroundColor: '#FFFFFF', padding: '10px', borderRadius: 0, '--px': 'pill', fontWeight: 700, fontSize: '12px', color: 'var(--ink)', cursor: 'pointer' }}>
+                              {months.map((m, idx) => (<option key={m} value={idx}>{m}</option>))}
+                            </select>
+                            <select value={editStartYear} onChange={(e) => setEditStartYear(parseInt(e.target.value))} style={{ width: '80px', backgroundColor: '#FFFFFF', padding: '10px', borderRadius: 0, '--px': 'pill', fontWeight: 700, fontSize: '12px', color: 'var(--ink)', cursor: 'pointer' }}>
+                              {availableYears.map(y => (<option key={y} value={y}>{y}</option>))}
+                            </select>
+                          </div>
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '12px', fontWeight: 800, color: 'var(--ink)', display: 'block', marginBottom: '4px' }}>End Date</label>
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            <select value={editEndMonthIndex} onChange={(e) => setEditEndMonthIndex(parseInt(e.target.value))} style={{ flex: 1, backgroundColor: '#FFFFFF', padding: '10px', borderRadius: 0, '--px': 'pill', fontWeight: 700, fontSize: '12px', color: 'var(--ink)', cursor: 'pointer' }}>
+                              {months.map((m, idx) => (<option key={m} value={idx}>{m}</option>))}
+                            </select>
+                            <select value={editEndYear} onChange={(e) => setEditEndYear(parseInt(e.target.value))} style={{ width: '80px', backgroundColor: '#FFFFFF', padding: '10px', borderRadius: 0, '--px': 'pill', fontWeight: 700, fontSize: '12px', color: 'var(--ink)', cursor: 'pointer' }}>
+                              {availableYears.map(y => (<option key={y} value={y}>{y}</option>))}
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--px-muted)' }}>
+                        Changing the amount or dates re-spreads the goal over the months not yet marked Paid. Paid months keep their amounts.
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
+                      <button onClick={() => setEditingGoalId(null)} style={{ backgroundColor: 'var(--px-butter)', borderRadius: 0, '--px': 'pill', padding: '10px 20px', fontWeight: 800, fontSize: '13px', color: 'var(--ink)', cursor: 'pointer' }}>Cancel</button>
+                      <button onClick={handleSaveEditedGoal} style={{ backgroundColor: 'var(--px-pink)', borderRadius: 0, '--px': 'pill', padding: '10px 24px', fontWeight: 800, fontSize: '13px', color: '#FFFFFF', cursor: 'pointer', boxShadow: '0 4px 15px rgba(223,177,91,0.3)' }}>Save Changes</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', flex: 1, overflowY: 'auto' }}>
                 {savingsGoals.length === 0 ? (
                   <div style={{ textAlign: 'center', padding: '48px', backgroundColor: 'var(--px-card)', borderRadius: 0, '--px': 'panel', color: 'var(--ink)', fontWeight: 800, fontSize: '16px' }}>
@@ -1544,6 +1744,9 @@ export default function App() {
                     const totalSavedNum = goal.monthsList.reduce((sum, m) => sum + (m.paid ? (parseFloat(m.amount) || 0) : 0), 0);
                     const amountLeftNum = Math.max(0, goalAmountNum - totalSavedNum);
                     const progressPct = goalAmountNum > 0 ? Math.min(100, Math.round((totalSavedNum / goalAmountNum) * 100)) : 0;
+                    const autoOn = goal.autoCompute !== false;
+                    const scheduledTotal = goal.monthsList.reduce((sum, m) => sum + (parseFloat(m.amount) || 0), 0);
+                    const scheduleDiff = Math.round(scheduledTotal - goalAmountNum);
 
                     return (
                       <div key={goal.id} style={{ backgroundColor: 'var(--px-card)', borderRadius: 0, '--px': 'panel', padding: '24px', boxShadow: '0 8px 25px rgba(223,177,91,0.15)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -1551,6 +1754,9 @@ export default function App() {
                           <div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
                               <h3 className="kutitap-title" style={{ fontSize: '20px', color: 'var(--px-accent)', margin: 0 }}>{goal.name}</h3>
+                              <button onClick={() => handleOpenEditGoal(goal)} style={{ backgroundColor: 'var(--px-butter)', borderRadius: 0, '--px': 'pill', padding: '4px 10px', color: 'var(--px-accent)', fontWeight: 800, fontSize: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <Pencil style={{ width: '12px', height: '12px' }} /> Edit
+                              </button>
                               <button onClick={() => handleDeleteGoal(goal.id)} style={{ backgroundColor: 'var(--px-butter)', borderRadius: 0, '--px': 'pill', padding: '4px 10px', color: 'var(--px-accent)', fontWeight: 800, fontSize: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                 <Trash2 style={{ width: '12px', height: '12px' }} /> Delete
                               </button>
@@ -1586,9 +1792,23 @@ export default function App() {
                         </div>
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', borderTop: '2px dashed var(--px-sun)', paddingTop: '14px' }}>
-                          <div style={{ fontSize: '12px', fontWeight: 800, color: 'var(--ink)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                            Month-by-Month Honey Schedule (Dynamic Redistribution)
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                            <div style={{ fontSize: '12px', fontWeight: 800, color: 'var(--ink)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                              Month-by-Month Honey Schedule (Dynamic Redistribution)
+                            </div>
+                            <button
+                              onClick={() => handleToggleGoalAutoCompute(goal.id)}
+                              title="On: changing one month re-spreads the rest of the goal. Off: only that month changes."
+                              style={{ borderRadius: 0, '--px': 'pill', padding: '4px 12px', fontWeight: 800, fontSize: '11px', cursor: 'pointer', backgroundColor: autoOn ? 'var(--px-mint)' : 'var(--px-butter)', color: autoOn ? 'var(--px-green-d)' : 'var(--px-accent)' }}
+                            >
+                              Auto-Compute: {autoOn ? 'ON' : 'OFF'}
+                            </button>
                           </div>
+                          {!autoOn && scheduleDiff !== 0 && (
+                            <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--px-accent)' }}>
+                              Schedule adds up to ₱{scheduledTotal.toLocaleString()} — ₱{Math.abs(scheduleDiff).toLocaleString()} {scheduleDiff > 0 ? 'over' : 'short of'} the goal.
+                            </div>
+                          )}
                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: '10px' }}>
                             {goal.monthsList.map((mItem) => (
                               <div key={mItem.monthKey} style={{ backgroundColor: '#FFFFFF', borderRadius: 0, '--px': 'card', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: '8px', boxShadow: '0 4px 12px rgba(223,177,91,0.08)' }}>
@@ -1732,27 +1952,30 @@ export default function App() {
                 </div>
               )}
 
-              <div style={{ backgroundColor: '#FFFFFF', borderRadius: 0, '--px': 'panel', overflowX: 'auto', boxShadow: '0 8px 25px rgba(223,177,91,0.15)', flex: 1 }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '650px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 700, color: 'var(--px-muted)', flexShrink: 0 }}>
+                <Sparkles style={{ width: '14px', height: '14px' }} /> Double-click an amount to mark it paid (turns green). Double-click again to mark it unpaid.
+              </div>
+
+              <div style={{ backgroundColor: '#FFFFFF', borderRadius: 0, '--px': 'panel', overflow: 'auto', boxShadow: '0 8px 25px rgba(223,177,91,0.15)', flex: '1 1 auto', minHeight: '320px', maxHeight: 'calc(100vh - 80px)' }}>
+                <table className="px-sticky-table" style={{ width: '100%', textAlign: 'left', minWidth: `${140 + (loanTableData[activeLoanCategory]?.columns.length || 0) * LOAN_COL_W + 150}px` }}>
                   <thead>
-                    <tr style={{ backgroundColor: 'var(--px-card)', borderBottom: '3px dashed var(--px-sun)' }}>
-                      <th style={{ padding: '14px 18px', fontSize: '13px', fontWeight: 800, color: 'var(--px-accent)', width: '140px', textAlign: 'center' }}>Date / Cutoff ({loanTableYear})</th>
-                      <th style={{ padding: '14px 18px', fontSize: '14px', fontWeight: 800, color: 'var(--px-accent)', textAlign: 'center' }} colSpan={(loanTableData[activeLoanCategory]?.columns.length || 0) + 2}>
+                    <tr>
+                      <th style={{ position: 'sticky', top: 0, left: 0, zIndex: 5, height: `${LOAN_HEAD_H}px`, padding: '0 18px', fontSize: '13px', fontWeight: 800, color: 'var(--px-accent)', width: '140px', minWidth: '140px', textAlign: 'center', backgroundColor: 'var(--px-card)', borderBottom: '3px dashed var(--px-sun)' }}>Date / Cutoff ({loanTableYear})</th>
+                      <th style={{ position: 'sticky', top: 0, zIndex: 3, height: `${LOAN_HEAD_H}px`, padding: '0 18px', fontSize: '14px', fontWeight: 800, color: 'var(--px-accent)', textAlign: 'center', backgroundColor: 'var(--px-card)', borderBottom: '3px dashed var(--px-sun)' }} colSpan={(loanTableData[activeLoanCategory]?.columns.length || 0) + 1}>
                         {activeLoanCategory} Table View
                       </th>
                     </tr>
-                    <tr style={{ backgroundColor: 'var(--px-butter)', borderBottom: '2px solid var(--px-sun)' }}>
-                      <th style={{ padding: '10px 18px', fontSize: '12px', fontWeight: 800, color: 'var(--ink)', textAlign: 'center' }}>Cutoff</th>
+                    <tr>
+                      <th style={{ position: 'sticky', top: `${LOAN_HEAD_H}px`, left: 0, zIndex: 5, padding: '10px 18px', fontSize: '12px', fontWeight: 800, color: 'var(--ink)', textAlign: 'center', backgroundColor: 'var(--px-butter)', borderBottom: '2px solid var(--px-sun)', borderRight: '3px solid var(--px-sun)' }}>Cutoff</th>
                       {loanTableData[activeLoanCategory]?.columns.map(col => (
-                        <th key={col} style={{ padding: '10px 14px', fontSize: '12px', fontWeight: 800, color: 'var(--ink)', textAlign: 'center' }}>
+                        <th key={col} style={{ position: 'sticky', top: `${LOAN_HEAD_H}px`, zIndex: 3, minWidth: `${LOAN_COL_W}px`, padding: '10px 14px', fontSize: '12px', fontWeight: 800, color: 'var(--ink)', textAlign: 'center', backgroundColor: 'var(--px-butter)', borderBottom: '2px solid var(--px-sun)' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '6px' }}>
                             <span style={{ flex: 1, textAlign: 'center' }}>{col}</span>
                             <button onClick={() => handleDeleteColumn(col)} title="Delete Column" style={{ backgroundColor: 'transparent', color: 'var(--px-accent)', cursor: 'pointer', padding: '2px' }}><X style={{ width: '12px', height: '12px' }} /></button>
                           </div>
                         </th>
                       ))}
-                      <th style={{ padding: '10px 14px', fontSize: '12px', fontWeight: 800, color: 'var(--px-green-d)', textAlign: 'center', backgroundColor: 'var(--px-mint-lt)' }}>Row Total</th>
-                      <th style={{ padding: '10px 14px', fontSize: '12px', fontWeight: 800, color: 'var(--ink)', textAlign: 'center', backgroundColor: 'var(--px-butter)' }}>Status</th>
+                      <th style={{ position: 'sticky', top: `${LOAN_HEAD_H}px`, zIndex: 3, minWidth: '150px', padding: '10px 14px', fontSize: '12px', fontWeight: 800, color: 'var(--px-green-d)', textAlign: 'center', backgroundColor: 'var(--px-mint-lt)', borderBottom: '2px solid var(--px-sun)' }}>Row Total</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1763,33 +1986,41 @@ export default function App() {
                       const rowKey = `${loanTableYear}-${row.month}-${row.cutoff}`;
                       const catData = loanTableData[activeLoanCategory] || { columns: [], cells: {}, paidStatus: {} };
                       const rowValues = catData.cells[rowKey] || {};
-                      const rowTotalNum = Object.values(rowValues).reduce((sum, v) => sum + (parseFloat(v) || 0), 0);
-                      const isPaid = !!catData.paidStatus[rowKey];
+                      const rowAmt = getRowAmounts(catData, rowKey);
+                      const cellBorder = '2px solid rgba(74,29,54,0.15)';
 
                       return (
-                        <tr key={rowKey} style={{ borderBottom: '1px solid var(--px-butter)', backgroundColor: idx % 2 === 0 ? '#FFFFFF' : 'var(--px-paper)' }}>
-                          <td style={{ padding: '10px 18px', fontSize: '13px', fontWeight: 800, color: 'var(--ink)', textAlign: 'center', backgroundColor: 'var(--px-card)' }}>{row.label}</td>
+                        <tr key={rowKey} style={{ backgroundColor: idx % 2 === 0 ? '#FFFFFF' : 'var(--px-paper)' }}>
+                          <td style={{ position: 'sticky', left: 0, zIndex: 2, padding: '10px 18px', fontSize: '13px', fontWeight: 800, color: 'var(--ink)', textAlign: 'center', backgroundColor: 'var(--px-card)', borderBottom: cellBorder, borderRight: '3px solid var(--px-sun)' }}>{row.label}</td>
                           {catData.columns.map(col => {
                             const val = rowValues[col] || '';
+                            const hasEntry = (parseFloat(val) || 0) !== 0;
+                            const cellPaid = hasEntry && !!catData.paidCells?.[rowKey]?.[col];
                             return (
-                              <td key={col} style={{ padding: '6px 10px', textAlign: 'center' }}>
+                              <td key={col} style={{ padding: '6px 10px', textAlign: 'center', minWidth: `${LOAN_COL_W}px`, borderBottom: cellBorder }}>
                                 <input
                                   type="number"
-                                  placeholder="0"
+                                  data-paid={hasEntry ? String(cellPaid) : undefined}
+                                  title={hasEntry ? (cellPaid ? 'Paid - double-click to mark unpaid' : 'Unpaid - double-click to mark paid') : undefined}
                                   value={val === 0 || val === '0' ? '' : val}
                                   onChange={(e) => handleCellChange(activeLoanCategory, loanTableYear, row.month, row.cutoff, col, e.target.value)}
-                                  style={{ width: '100%', padding: '6px 8px', borderRadius: 0, '--px': 'pill', fontWeight: 700, fontSize: '13px', color: 'var(--ink)', textAlign: 'center', backgroundColor: val ? 'var(--px-sun)' : 'var(--px-paper)' }}
+                                  onDoubleClick={(e) => {
+                                    if (!hasEntry) return;
+                                    handleToggleCellPaid(activeLoanCategory, loanTableYear, row.month, row.cutoff, col);
+                                    e.currentTarget.blur();
+                                  }}
+                                  style={{ width: '100%', padding: '6px 8px', borderRadius: 0, '--px': 'pill', fontWeight: 700, fontSize: '13px', color: cellPaid ? 'var(--px-green-d)' : 'var(--ink)', textAlign: 'center', touchAction: 'manipulation', backgroundColor: cellPaid ? 'var(--px-mint)' : (hasEntry ? 'var(--px-sun)' : 'var(--px-paper)') }}
                                 />
                               </td>
                             );
                           })}
-                          <td style={{ padding: '10px 14px', fontSize: '13px', fontWeight: 800, color: 'var(--px-green-d)', textAlign: 'center', backgroundColor: 'var(--px-mint-lt)' }}>
-                            {rowTotalNum > 0 ? `₱${rowTotalNum.toLocaleString()}` : '-'}
-                          </td>
-                          <td style={{ padding: '6px 10px', textAlign: 'center' }}>
-                            <button onClick={() => handleToggleLoanPaid(activeLoanCategory, loanTableYear, row.month, row.cutoff)} style={{ padding: '6px 12px', borderRadius: 0, '--px': 'pill', fontWeight: 800, fontSize: '11px', cursor: 'pointer', width: '100%', backgroundColor: isPaid ? 'var(--px-mint)' : 'var(--px-butter)', color: isPaid ? 'var(--px-green-d)' : 'var(--px-accent)' }}>
-                              {isPaid ? 'Paid' : 'Not Paid'}
-                            </button>
+                          <td style={{ padding: '10px 14px', fontSize: '13px', fontWeight: 800, color: 'var(--px-green-d)', textAlign: 'center', backgroundColor: 'var(--px-mint-lt)', borderBottom: cellBorder }}>
+                            {rowAmt.total > 0 ? (
+                              <div>
+                                <div>₱{rowAmt.unpaid.toLocaleString()}</div>
+                                {rowAmt.paid > 0 && <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--px-muted)' }}>of ₱{rowAmt.total.toLocaleString()}</div>}
+                              </div>
+                            ) : '-'}
                           </td>
                         </tr>
                       );
@@ -1855,7 +2086,7 @@ export default function App() {
                     {!isPastMonth && (rateTrend === 'up' ? <ArrowUpRight style={{ width: '16px', height: '16px', color: 'var(--px-accent)' }} /> : <ArrowDownRight style={{ width: '16px', height: '16px', color: 'var(--px-accent)' }} />)}
                   </span>
                   <span style={{ color: 'var(--px-green-d)' }}>Worked Hours: {totalWorkedHours} hrs</span>
-                  <span style={{ color: 'var(--px-accent)' }}>Total Estimated Salary: ₱{estimatedSalaryPHP.toLocaleString()}</span>
+                  <span title={`Carries over to ${months[(attMonthIndex + 1) % 12]} ${attMonthIndex === 11 ? attYear + 1 : attYear} Expected Income`} style={{ color: 'var(--px-accent)' }}>Total Estimated Salary: ₱{estimatedSalaryPHP.toLocaleString()}</span>
                 </div>
               </div>
 
