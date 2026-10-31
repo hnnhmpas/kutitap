@@ -43,6 +43,31 @@ import spStamp from './assets/pixel/stamp.png';
 import spBunny from './assets/pixel/bunny.png';
 import spTama from './assets/pixel/tama.png';
 
+// Claw machine prizes (strawberry dessert sheet)
+import dsStrawberry from './assets/pixel/dessert-strawberry.png';
+import dsCupcake from './assets/pixel/dessert-cupcake.png';
+import dsDonut from './assets/pixel/dessert-donut.png';
+import dsCakeSlice from './assets/pixel/dessert-cakeslice.png';
+import dsMacaron from './assets/pixel/dessert-macaron.png';
+import dsTart from './assets/pixel/dessert-tart.png';
+import dsShortcake from './assets/pixel/dessert-shortcake.png';
+import dsRollCake from './assets/pixel/dessert-rollcake.png';
+
+// Bill Buddy cat + meadow scenery
+import catHappy from './assets/pixel/cat-happy.png';
+import catSad from './assets/pixel/cat-sad.png';
+import catSleep from './assets/pixel/cat-sleep.png';
+import catWalkDown from './assets/pixel/cat-walk-down.png';
+import catWalkLeft from './assets/pixel/cat-walk-left.png';
+import catWalkRight from './assets/pixel/cat-walk-right.png';
+import scTree from './assets/pixel/scene-tree.png';
+import scBush from './assets/pixel/scene-bush.png';
+import scFlowerY from './assets/pixel/scene-flower-yellow.png';
+import scFlowerP from './assets/pixel/scene-flower-pink.png';
+import scFlowerB from './assets/pixel/scene-flower-blue.png';
+import scMush from './assets/pixel/scene-mush.png';
+import spHeart from './assets/pixel/heart.png';
+
 const NAV_SPRITES = {
   dashboard: spTama,
   'income-expense': spToast,
@@ -189,12 +214,29 @@ function PixelFX() {
       lastKey = now;
       tone([[900 + Math.random() * 250, 0.025]], 0.015);
     };
+    const onSfx = (e) => {
+      const d = e.detail || {};
+      const cx = d.x !== undefined ? d.x : window.innerWidth / 2;
+      const cy = d.y !== undefined ? d.y : window.innerHeight / 2;
+      if (d.type === 'drop') tone([[300, 0.05], [240, 0.06], [180, 0.08]]);
+      else if (d.type === 'grab') tone([[200, 0.05], [260, 0.06]]);
+      else if (d.type === 'miss') tone([[300, 0.1], [220, 0.12], [160, 0.2]]);
+      else if (d.type === 'win') {
+        tone([[523, 0.08], [659, 0.08], [784, 0.08], [1047, 0.2]]);
+        burst(cx, cy, 16, ['#ffd86b', '#f0589a', '#9be58a', '#fff3d4']);
+      } else if (d.type === 'cat') {
+        tone([[784, 0.07], [988, 0.07], [1175, 0.07], [1568, 0.22]]);
+        burst(cx, cy, 16, ['#f0589a', '#ffd86b', '#fff3d4']);
+      }
+    };
+    window.addEventListener('kutitap-sfx', onSfx);
     document.addEventListener('pointerdown', onDown, true);
     document.addEventListener('input', onInput, true);
     document.addEventListener('dblclick', onDbl, true);
     return () => {
       document.removeEventListener('pointerdown', onDown, true);
       document.removeEventListener('input', onInput, true);
+      window.removeEventListener('kutitap-sfx', onSfx);
       document.removeEventListener('dblclick', onDbl, true);
     };
   }, []);
@@ -213,6 +255,443 @@ function PixelFX() {
     >
       {muted ? <VolumeX size={20} /> : <Volume2 size={20} />}
     </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Pixel meter (segmented bar) used by the dashboard table
+// ---------------------------------------------------------------------------
+function PixelMeter({ pct, tone = 'pink', segments = 12 }) {
+  const safe = Math.max(0, Math.min(100, Number.isFinite(pct) ? pct : 0));
+  const on = Math.round((safe / 100) * segments);
+  return (
+    <div className={`px-meter px-meter-${tone}`} role="progressbar" aria-valuenow={safe} aria-valuemin={0} aria-valuemax={100}>
+      {Array.from({ length: segments }).map((_, i) => (
+        <span key={i} className={i < on ? 'on' : ''} style={{ '--i': i }} />
+      ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Bill Buddy: the cat on the Income & Expense tab.
+// Purely presentational: it only receives how many "Not Paid" boxes are left.
+// ---------------------------------------------------------------------------
+function PixelCat({ unpaid, total, monthName }) {
+  const paid = total - unpaid;
+  const allPaid = total > 0 && unpaid === 0;
+  const pct = total > 0 ? Math.round((paid / total) * 100) : 0;
+  const mood = total === 0 ? 'sleep' : allPaid ? 'happy' : paid > 0 ? 'ok' : 'sad';
+
+  // little victory dance the moment the last box flips to Paid
+  const [cheer, setCheer] = useState(false);
+  const wasAllPaid = useRef(allPaid);
+  useEffect(() => {
+    let timer;
+    if (allPaid && !wasAllPaid.current) {
+      setCheer(true);
+      window.dispatchEvent(new CustomEvent('kutitap-sfx', { detail: { type: 'cat' } }));
+      timer = setTimeout(() => setCheer(false), 2600);
+    }
+    wasAllPaid.current = allPaid;
+    return () => clearTimeout(timer);
+  }, [allPaid]);
+
+  const message = {
+    sleep: 'Nothing to pay yet. Kitty is napping...',
+    sad: `${unpaid} unpaid box${unpaid === 1 ? '' : 'es'}! Kitty is worried...`,
+    ok: `${unpaid} more to go! Kitty is getting hopeful...`,
+    happy: 'Every box is paid! Kitty is so happy!'
+  }[mood];
+
+  return (
+    <div style={{ background: 'var(--px-card)', borderRadius: 0, '--px': 'panel', padding: '16px', textAlign: 'center', width: '100%', flexShrink: 0, boxShadow: '0 8px 25px rgba(223,177,91,0.15)' }}>
+      <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--px-accent)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+        <Sprite src={spHeart} className="px-heart-icon" /> Bill Buddy · {monthName}
+      </div>
+
+      <div className={`px-meadow px-meadow-${mood}`}>
+        <img className="px-sprite px-scene px-scene-tree" src={scTree} alt="" />
+        <img className="px-sprite px-scene px-scene-bush" src={scBush} alt="" />
+        <img className="px-sprite px-scene px-scene-fy" src={scFlowerY} alt="" />
+        <img className="px-sprite px-scene px-scene-fp" src={scFlowerP} alt="" />
+        <img className="px-sprite px-scene px-scene-fb" src={scFlowerB} alt="" />
+        <img className="px-sprite px-scene px-scene-mush" src={scMush} alt="" />
+
+        {mood === 'sleep' && (
+          <>
+            <img className="px-sprite px-cat-sleep" src={catSleep} alt="Sleeping kitty" />
+            <span className="px-zzz px-zzz-1">z</span>
+            <span className="px-zzz px-zzz-2">Z</span>
+          </>
+        )}
+        {mood === 'sad' && (
+          <>
+            <img className="px-sprite px-cat px-cat-sad" src={catSad} alt="Worried kitty" />
+            <span className="px-sweat" />
+          </>
+        )}
+        {mood === 'ok' && <div className="px-sprite px-cat px-cat-fidget" role="img" aria-label="Hopeful kitty" style={{ backgroundImage: `url(${catWalkDown})` }} />}
+        {mood === 'happy' && cheer && <img className="px-sprite px-cat px-cat-cheer" src={catHappy} alt="Happy kitty" />}
+        {mood === 'happy' && !cheer && (
+          <>
+            <div className="px-sprite px-walker px-walk-r" role="img" aria-label="Happy kitty" style={{ backgroundImage: `url(${catWalkRight})` }} />
+            <div className="px-sprite px-walker px-walk-l" aria-hidden="true" style={{ backgroundImage: `url(${catWalkLeft})` }} />
+          </>
+        )}
+        {mood === 'happy' && [8, 24, 40, 58, 74, 88].map((left, i) => (
+          <img key={left} className="px-sprite px-heart" src={spHeart} alt="" style={{ left: `${left}%`, animationDelay: `${i * 0.35}s` }} />
+        ))}
+      </div>
+
+      <div className="px-cat-bubble" aria-live="polite">{message}</div>
+      <div className="px-cat-hud">
+        <span>Happiness</span>
+        <PixelMeter pct={pct} tone={allPaid ? 'green' : 'pink'} segments={10} />
+        <span>{paid}/{total} paid</span>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Claw machine (dashboard). Self-contained: it only touches its own state and
+// remembers the prizes you collected in localStorage (device only).
+// ---------------------------------------------------------------------------
+const CLAW_W = 360;
+const CLAW_H = 440;
+const CLAW_PRIZE = 54;
+const CLAW_FLOOR = 12;
+const CLAW_RAIL = 12;
+const CLAW_HEAD = 40;
+const CLAW_REST = 24;
+const CLAW_MIN_X = 30;
+const CLAW_MAX_X = 330;
+const CLAW_CHUTE_X = 46;
+const CLAW_SPEED = 170;
+const CLAW_TRIES = 5;
+const CLAW_PRIZES = [
+  { name: 'Strawberry', src: dsStrawberry },
+  { name: 'Cupcake', src: dsCupcake },
+  { name: 'Donut', src: dsDonut },
+  { name: 'Cake Slice', src: dsCakeSlice },
+  { name: 'Macaron', src: dsMacaron },
+  { name: 'Berry Tart', src: dsTart },
+  { name: 'Shortcake', src: dsShortcake },
+  { name: 'Roll Cake', src: dsRollCake }
+];
+let clawUid = 0;
+const clawClamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+const clawWait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function makeClawPrizes() {
+  const list = [];
+  [132, 170, 208, 246, 284, 322].forEach((cx) => {
+    const n = 1 + Math.floor(Math.random() * 3);
+    for (let r = 0; r < n; r++) {
+      list.push({
+        id: `cp${clawUid++}`,
+        kind: Math.floor(Math.random() * CLAW_PRIZES.length),
+        x: cx + (Math.random() * 8 - 4),
+        bottom: CLAW_FLOOR + r * 36 + Math.random() * 3,
+        rot: Math.random() * 20 - 10
+      });
+    }
+  });
+  return list;
+}
+
+function ClawMachine() {
+  const [prizes, setPrizes] = useState(makeClawPrizes);
+  const [tries, setTries] = useState(CLAW_TRIES);
+  const [roundWins, setRoundWins] = useState(0);
+  const [won, setWon] = useState(() => {
+    try {
+      const v = JSON.parse(window.localStorage.getItem('kutitap_claw_prizes') || '[]');
+      return Array.isArray(v) ? v.filter((k) => Number.isInteger(k) && k >= 0 && k < CLAW_PRIZES.length) : [];
+    } catch (e) { return []; }
+  });
+  const [clawX, setClawX] = useState(180);
+  const [rope, setRope] = useState(CLAW_REST);
+  const [open, setOpen] = useState(true);
+  const [carried, setCarried] = useState(null);
+  const [auto, setAuto] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('Line it up, then press Drop!');
+  const [flash, setFlash] = useState(null);
+  const [scale, setScale] = useState(1);
+
+  const xRef = useRef(180);
+  const dirRef = useRef(0);
+  const busyRef = useRef(false);
+  const alive = useRef(true);
+  const prizesRef = useRef(prizes);
+  const dropRef = useRef(null);
+  const wrapRef = useRef(null);
+
+  useEffect(() => { prizesRef.current = prizes; }, [prizes]);
+  useEffect(() => {
+    try { window.localStorage.setItem('kutitap_claw_prizes', JSON.stringify(won)); } catch (e) { /* ignore */ }
+  }, [won]);
+  useEffect(() => {
+    alive.current = true;
+    return () => { alive.current = false; };
+  }, []);
+
+  // scale the fixed-size stage to the panel width
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return undefined;
+    const ro = new ResizeObserver(([e]) => setScale(Math.min(1.3, e.contentRect.width / CLAW_W)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // smooth left/right movement
+  useEffect(() => {
+    let raf;
+    let last = performance.now();
+    const tick = (t) => {
+      const dt = Math.min(0.05, (t - last) / 1000);
+      last = t;
+      if (dirRef.current && !busyRef.current) {
+        const nx = clawClamp(xRef.current + dirRef.current * CLAW_SPEED * dt, CLAW_MIN_X, CLAW_MAX_X);
+        if (nx !== xRef.current) { xRef.current = nx; setClawX(nx); }
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  const over = !busy && (tries <= 0 || prizes.length === 0);
+  const sfx = (type, extra = {}) => window.dispatchEvent(new CustomEvent('kutitap-sfx', { detail: { type, ...extra } }));
+
+  async function drop() {
+    if (busyRef.current || tries <= 0 || prizesRef.current.length === 0) return;
+    busyRef.current = true;
+    dirRef.current = 0;
+    setBusy(true);
+    setTries((t) => t - 1);
+    setMsg('Going down...');
+    sfx('drop');
+
+    const step = async (ms) => { await clawWait(ms); return alive.current; };
+    const x = xRef.current;
+    const hit = prizesRef.current
+      .map((p) => ({ p, top: CLAW_H - p.bottom - CLAW_PRIZE, dx: Math.abs(p.x - x) }))
+      .filter((c) => c.dx < 30)
+      .sort((a, b) => a.top - b.top || a.dx - b.dx)[0];
+    const ropeTarget = hit
+      ? Math.max(CLAW_REST, hit.top + 14 - (CLAW_RAIL + CLAW_HEAD))
+      : CLAW_H - CLAW_RAIL - CLAW_HEAD - CLAW_FLOOR - 2;
+
+    setOpen(true);
+    if (!(await step(250))) return;
+    setRope(ropeTarget);
+    if (!(await step(1050))) return;
+    setOpen(false);
+    sfx('grab');
+    if (!(await step(550))) return;
+
+    const chance = hit ? (hit.dx <= 8 ? 0.92 : hit.dx <= 16 ? 0.65 : 0.3) : 0;
+    const got = hit && Math.random() < chance ? hit.p : null;
+    if (got) {
+      setPrizes((ps) => ps.filter((p) => p.id !== got.id));
+      setCarried(got);
+      setMsg('Got one! Hold on...');
+    } else {
+      setMsg('Missed! Line it up closer.');
+      sfx('miss');
+    }
+    setRope(CLAW_REST);
+
+    let kept = got;
+    if (got) {
+      const slip = Math.random() < (hit.dx <= 8 ? 0.12 : 0.3);
+      if (!(await step(450))) return;
+      if (slip) {
+        const midBottom = CLAW_H - ((ropeTarget + CLAW_REST) / 2 + CLAW_RAIL + CLAW_HEAD) - CLAW_PRIZE / 2;
+        setCarried(null);
+        setPrizes((ps) => [...ps, { ...got, bottom: midBottom }]);
+        setMsg('Oh no, it slipped!');
+        sfx('miss');
+        kept = null;
+        await clawWait(30);
+        setPrizes((ps) => ps.map((p) => (p.id === got.id ? { ...p, bottom: got.bottom } : p)));
+      }
+      if (!(await step(550))) return;
+    } else if (!(await step(1000))) return;
+
+    if (!(await step(300))) return;
+    setAuto(true);
+    xRef.current = CLAW_CHUTE_X;
+    setClawX(CLAW_CHUTE_X);
+    if (!(await step(1150))) return;
+
+    setOpen(true);
+    if (kept) {
+      const kind = kept.kind;
+      setCarried(null);
+      setPrizes((ps) => [...ps, { ...kept, x: CLAW_CHUTE_X, bottom: CLAW_H - 62 - CLAW_PRIZE, rot: 0 }]);
+      await clawWait(30);
+      setPrizes((ps) => ps.map((p) => (p.id === kept.id ? { ...p, bottom: CLAW_FLOOR + 14 } : p)));
+      if (!(await step(750))) return;
+      setPrizes((ps) => ps.filter((p) => p.id !== kept.id));
+      setWon((w) => [...w, kind]);
+      setRoundWins((n) => n + 1);
+      const name = CLAW_PRIZES[kind].name;
+      setMsg(`You won a ${name}!`);
+      setFlash(name);
+      sfx('win');
+      setTimeout(() => setFlash(null), 1700);
+    } else if (!(await step(300))) return;
+
+    if (!(await step(350))) return;
+    setOpen(false);
+    setAuto(false);
+    busyRef.current = false;
+    setBusy(false);
+  }
+  dropRef.current = drop;
+
+  function reset() {
+    setPrizes(makeClawPrizes());
+    setTries(CLAW_TRIES);
+    setRoundWins(0);
+    setCarried(null);
+    setRope(CLAW_REST);
+    setOpen(true);
+    setAuto(false);
+    xRef.current = 180;
+    setClawX(180);
+    setMsg('Line it up, then press Drop!');
+  }
+
+  const onKeyDown = (e) => {
+    const k = e.key.toLowerCase();
+    if (k === 'arrowleft' || k === 'a') { dirRef.current = -1; e.preventDefault(); }
+    else if (k === 'arrowright' || k === 'd') { dirRef.current = 1; e.preventDefault(); }
+    else if ((k === ' ' || k === 'enter') && e.target.tagName === 'BUTTON') { /* the focused button handles it */ }
+    else if (k === ' ' || k === 'enter' || k === 'arrowdown') { e.preventDefault(); if (!e.repeat) dropRef.current && dropRef.current(); }
+  };
+  const onKeyUp = (e) => {
+    const k = e.key.toLowerCase();
+    if (((k === 'arrowleft' || k === 'a') && dirRef.current === -1) || ((k === 'arrowright' || k === 'd') && dirRef.current === 1)) dirRef.current = 0;
+  };
+  const stop = () => { dirRef.current = 0; };
+  const hold = (d) => ({
+    onPointerDown: (e) => { e.preventDefault(); dirRef.current = d; },
+    onPointerUp: stop,
+    onPointerLeave: stop,
+    onPointerCancel: stop
+  });
+
+  const glide = auto ? 'left 1.1s ease-in-out' : 'none';
+  const locked = busy || over;
+  const counts = CLAW_PRIZES.map((_, i) => won.filter((k) => k === i).length);
+  const collected = counts.filter((c) => c > 0).length;
+  const btn = { borderRadius: 0, '--px': 'pill', height: '52px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', cursor: locked ? 'not-allowed' : 'pointer', touchAction: 'none', fontWeight: 800, fontSize: '15px', opacity: locked ? 0.5 : 1 };
+
+  return (
+    <div
+      className="claw-cabinet"
+      tabIndex={0}
+      onKeyDown={onKeyDown}
+      onKeyUp={onKeyUp}
+      onBlur={stop}
+      style={{ backgroundColor: 'var(--px-pink)', borderRadius: 0, '--px': 'panel', padding: '14px', display: 'flex', flexDirection: 'column', gap: '10px', boxShadow: '0 8px 25px rgba(223,177,91,0.15)' }}
+    >
+      <div className="claw-marquee">
+        <span className="claw-title">Claw Catch</span>
+        <span className="claw-lives" aria-label={`${tries} tries left`}>
+          {Array.from({ length: CLAW_TRIES }).map((_, i) => (
+            <img key={i} src={spHeart} alt="" className={`px-sprite claw-heart${i < tries ? '' : ' off'}`} />
+          ))}
+        </span>
+      </div>
+      <div className="claw-bulbs" aria-hidden="true">
+        {Array.from({ length: 16 }).map((_, i) => (
+          <span key={i} className="claw-bulb" style={{ animationDelay: `${(i % 4) * 0.25}s` }} />
+        ))}
+      </div>
+
+      <div ref={wrapRef} className="claw-glass" style={{ height: CLAW_H * scale }}>
+        <div className="claw-stage" style={{ width: CLAW_W, height: CLAW_H, transform: `scale(${scale})` }}>
+          <div className="claw-floor" />
+          <div className="claw-rail" />
+          <div className="claw-carriage" style={{ left: clawX, transition: glide }} />
+
+          <div className="claw-chute-back" />
+          <div className="claw-chute-lip"><span>PRIZE</span></div>
+
+          {prizes.map((p) => (
+            <div key={p.id} className="claw-prize" style={{ left: p.x - CLAW_PRIZE / 2, bottom: p.bottom, transform: `rotate(${p.rot}deg)` }}>
+              <img className="px-sprite" src={CLAW_PRIZES[p.kind].src} alt="" style={{ width: CLAW_PRIZE, height: CLAW_PRIZE }} />
+            </div>
+          ))}
+
+          <div className="claw-unit" style={{ left: clawX, top: CLAW_RAIL, transition: glide }}>
+            <div className="claw-rope" style={{ height: rope }} />
+            <div className="claw-head" style={{ height: CLAW_HEAD }}>
+              {carried && (
+                <img className="px-sprite claw-carried" src={CLAW_PRIZES[carried.kind].src} alt="" style={{ width: CLAW_PRIZE, height: CLAW_PRIZE }} />
+              )}
+              <div className="claw-hub" />
+              {[1, -1].map((side) => (
+                <div key={side} className="claw-arm" style={{ transform: `rotate(${side * (open ? 36 : 10)}deg)` }} />
+              ))}
+            </div>
+          </div>
+
+          {flash && <div className="claw-flash">You won a {flash}!</div>}
+
+          {over && (
+            <div className="claw-end">
+              <div className="claw-end-card">
+                <div className="claw-end-title">{prizes.length === 0 ? 'Machine cleared!' : 'Out of tries!'}</div>
+                <div className="claw-end-sub">
+                  {roundWins === 0 ? 'No prizes this round.' : `You won ${roundWins} prize${roundWins > 1 ? 's' : ''} this round.`}
+                </div>
+                <button
+                  onClick={reset}
+                  style={{ backgroundColor: 'var(--px-pink)', color: '#FFFFFF', borderRadius: 0, '--px': 'pill', padding: '10px 18px', fontWeight: 800, fontSize: '13px', cursor: 'pointer', marginTop: '12px' }}
+                >
+                  Play again
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="claw-msg" aria-live="polite">{msg}</div>
+
+      <div className="claw-controls">
+        <button {...hold(-1)} disabled={locked} aria-label="Move claw left" style={{ ...btn, backgroundColor: 'var(--px-sun)', color: 'var(--ink)' }}>
+          <ChevronLeft style={{ width: '24px', height: '24px' }} />
+        </button>
+        <button onClick={drop} disabled={locked} style={{ ...btn, backgroundColor: 'var(--px-butter)', color: 'var(--px-accent)', fontSize: '16px' }}>
+          <ChevronDown style={{ width: '20px', height: '20px' }} /> Drop
+        </button>
+        <button {...hold(1)} disabled={locked} aria-label="Move claw right" style={{ ...btn, backgroundColor: 'var(--px-sun)', color: 'var(--ink)' }}>
+          <ChevronRight style={{ width: '24px', height: '24px' }} />
+        </button>
+      </div>
+      <div className="claw-hint">Click the machine, then use ← → and Space</div>
+
+      <div className="claw-collection-wrap">
+        <div className="claw-coll-label">Collection {collected}/{CLAW_PRIZES.length}</div>
+        <div className="claw-collection">
+          {CLAW_PRIZES.map((pz, i) => (
+            <div key={pz.name} className={`claw-slot${counts[i] ? ' got' : ''}`} title={counts[i] ? `${pz.name} x${counts[i]}` : '???'}>
+              <img className="px-sprite" src={pz.src} alt={counts[i] ? pz.name : 'Not won yet'} />
+              {counts[i] > 1 && <b>x{counts[i]}</b>}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1269,45 +1748,51 @@ export default function App() {
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px', alignItems: 'stretch' }}>
-                <div style={{ backgroundColor: 'var(--px-card)', borderRadius: 0, '--px': 'panel', padding: '24px', boxShadow: '0 8px 25px rgba(223,177,91,0.15)', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div className="px-dash-grid">
+                <div style={{ backgroundColor: 'var(--px-card)', borderRadius: 0, '--px': 'panel', padding: '24px', boxShadow: '0 8px 25px rgba(223,177,91,0.15)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   <div className="kutitap-title" style={{ fontSize: '16px', color: 'var(--px-accent)', textTransform: 'uppercase', paddingBottom: '8px', borderBottom: '2px dashed var(--px-sun)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <LayoutDashboard style={{ width: '18px', height: '18px' }} /> Year-at-a-Glance Summary ({dashFilterYear})
                   </div>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px', fontWeight: 700 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', backgroundColor: '#FFFFFF', borderRadius: 0, '--px': 'pill', boxShadow: '0 4px 12px rgba(223,177,91,0.08)' }}>
-                      <span style={{ color: 'var(--ink)' }}>Total Annual Actual Income</span>
-                      <span style={{ color: 'var(--px-green-d)' }}>₱{annualActualIncomeSum.toLocaleString()}</span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', backgroundColor: '#FFFFFF', borderRadius: 0, '--px': 'pill', boxShadow: '0 4px 12px rgba(223,177,91,0.08)' }}>
-                      <span style={{ color: 'var(--ink)' }}>Total Annual Obligations & Expenses</span>
-                      <span style={{ color: 'var(--px-accent)' }}>₱{annualDuesSum.toLocaleString()}</span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', backgroundColor: '#FFFFFF', borderRadius: 0, '--px': 'pill', boxShadow: '0 4px 12px rgba(223,177,91,0.08)' }}>
-                      <span style={{ color: 'var(--ink)' }}>Total Savings Goals Accumulation</span>
-                      <span style={{ color: 'var(--px-green-d)' }}>₱{totalSavingsSavedAmount.toLocaleString()} / ₱{totalSavingsGoalsAmount.toLocaleString()}</span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', backgroundColor: '#FFFFFF', borderRadius: 0, '--px': 'pill', boxShadow: '0 4px 12px rgba(223,177,91,0.08)' }}>
-                      <span style={{ color: 'var(--ink)' }}>Remaining Outstanding Loans</span>
-                      <span style={{ color: 'var(--px-accent)' }}>₱{yearTotalUnpaid.toLocaleString()}</span>
-                    </div>
-                  </div>
+                  {(() => {
+                    const income = annualActualIncomeSum;
+                    const pctOfIncome = (v) => (income > 0 ? Math.round((v / income) * 100) : 0);
+                    const leftOver = annualActualIncomeSum - annualDuesSum;
+                    const money = (v) => (v < 0 ? `-₱${Math.abs(v).toLocaleString()}` : `₱${v.toLocaleString()}`);
+                    const rows = [
+                      { key: 'income', icon: spApple, label: 'Total Annual Actual Income', value: money(annualActualIncomeSum), tone: 'green', pct: income > 0 ? 100 : 0, cap: 'earned' },
+                      { key: 'dues', icon: spDango, label: 'Total Annual Obligations & Expenses', value: money(annualDuesSum), tone: 'pink', pct: pctOfIncome(annualDuesSum), cap: 'of income' },
+                      { key: 'save', icon: spStrawberry, label: 'Total Savings Goals Accumulation', value: `₱${totalSavingsSavedAmount.toLocaleString()} / ₱${totalSavingsGoalsAmount.toLocaleString()}`, tone: 'green', pct: overallSavingsProgressPct, cap: 'of goal' },
+                      { key: 'loan', icon: spStamp, label: 'Remaining Outstanding Loans', value: money(yearTotalUnpaid), tone: 'pink', pct: yearTotalCost > 0 ? Math.round((yearTotalPaid / yearTotalCost) * 100) : 0, cap: 'repaid' },
+                      { key: 'left', icon: spClover, label: 'Coins Left After Obligations', value: money(leftOver), tone: leftOver >= 0 ? 'green' : 'pink', pct: leftOver > 0 ? pctOfIncome(leftOver) : 0, cap: 'of income' }
+                    ];
+                    return (
+                      <div style={{ flex: 1, display: 'flex' }}>
+                        <table className="px-fun-table">
+                          <thead>
+                            <tr><th>Stat</th><th>Amount</th><th>Meter</th></tr>
+                          </thead>
+                          <tbody>
+                            {rows.map((r) => (
+                              <tr key={r.key}>
+                                <td>
+                                  <div className="px-fun-stat"><Sprite src={r.icon} className="px-fun-icon" /><span>{r.label}</span></div>
+                                </td>
+                                <td><span className={`px-fun-val px-fun-${r.tone}`}>{r.value}</span></td>
+                                <td>
+                                  <PixelMeter pct={r.pct} tone={r.tone} />
+                                  <span className="px-fun-cap">{Math.max(0, Math.min(100, r.pct))}% {r.cap}</span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  })()}
                 </div>
 
-                <div style={{ background: 'var(--px-card)', borderRadius: 0, '--px': 'panel', padding: '24px', boxShadow: '0 8px 25px rgba(223,177,91,0.15)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', textAlign: 'center' }}>
-                  <div>
-                    <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--px-accent)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                      <Sparkles style={{ width: '16px', height: '16px' }} /> Finance Motivation
-                    </div>
-                    <div style={{ backgroundColor: '#FFFFFF', padding: '18px', borderRadius: 0, '--px': 'card', boxShadow: 'inset 0 2px 8px rgba(223,177,91,0.1)', fontSize: '13px', fontWeight: 700, color: 'var(--ink)', lineHeight: '1.5' }}>
-                      {currentQuote.text}
-                    </div>
-                  </div>
-                  <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--px-muted)', marginTop: '12px' }}>
-                    Kutitap • Stay Cozy
-                  </div>
-                </div>
+                <ClawMachine />
               </div>
             </div>
           )}
@@ -1421,14 +1906,19 @@ export default function App() {
                       </div>
                     </div>
                   </div>
-                  <div style={{ background: 'var(--px-card)', borderRadius: 0, '--px': 'panel', padding: '18px', textAlign: 'center', boxShadow: '0 8px 25px rgba(223,177,91,0.15)', width: '100%', flexShrink: 0 }}>
-                    <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--px-accent)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                      <Sparkles style={{ width: '14px', height: '14px' }} /> Sweet Note for {months[currentMonthIndex]}
-                    </div>
-                    <div style={{ backgroundColor: '#FFFFFF', padding: '14px', borderRadius: 0, '--px': 'card', fontSize: '13px', fontWeight: 700, color: 'var(--ink)', lineHeight: '1.4' }}>
-                      {currentQuote.text}
-                    </div>
-                  </div>
+                  <PixelCat
+                    monthName={months[currentMonthIndex]}
+                    unpaid={
+                      utilityItems.filter(i => !i.paid).length +
+                      currentMonthSavingsItems.filter(i => !i.paid).length +
+                      currentExpenses.filter(e => (e.category.trim() !== '' || e.amount !== '') && !e.paid).length
+                    }
+                    total={
+                      utilityItems.length +
+                      currentMonthSavingsItems.length +
+                      currentExpenses.filter(e => e.category.trim() !== '' || e.amount !== '').length
+                    }
+                  />
                 </div>
 
                 <div style={{ backgroundColor: 'var(--px-card)', borderRadius: 0, '--px': 'panel', padding: '20px', width: '100%', display: 'flex', flexDirection: 'column', height: '100%', maxHeight: 'calc(100vh - 100px)', boxShadow: '0 8px 25px rgba(223,177,91,0.15)' }}>
