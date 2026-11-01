@@ -68,6 +68,22 @@ import scFlowerB from './assets/pixel/scene-flower-blue.png';
 import scMush from './assets/pixel/scene-mush.png';
 import spHeart from './assets/pixel/heart.png';
 
+// Kutitap game: prize sets / shop foods, Star Coin, sky objects, angry face, shop pieces
+import { FOOD_SETS, ALL_FOODS, FOOD_BY_ID } from './kutitapFoods';
+import spStarCoin from './assets/shop/star-coin.png';
+import spNote from './assets/shop/note.png';
+import spAnger from './assets/shop/anger.png';
+import catAngry from './assets/shop/cat-angry.png';
+import spSun from './assets/shop/sun.png';
+import spMoon from './assets/shop/moon.png';
+import spTwinkle from './assets/shop/twinkle.png';
+import spCloud from './assets/shop/cloud.png';
+import shBunny from './assets/shop/bunny-idle.png';
+import shCounter from './assets/shop/counter-cab.png';
+import shDoor from './assets/shop/door-red.png';
+import shPlantA from './assets/shop/plant-a.png';
+import shPlantB from './assets/shop/plant-b.png';
+
 const NAV_SPRITES = {
   dashboard: spTama,
   'income-expense': spToast,
@@ -88,6 +104,19 @@ const LOAN_COL_W = 140;
 // - updates made before the first snapshot arrives are queued and applied ON TOP of the loaded data
 //   (previously they were written over it, which wiped saved entries such as November's Actual Income)
 // - echoes of our own pending writes are ignored, so typing/toggling never gets overwritten by an older copy
+const loadedKeys = new Set();
+function useDataReady(keys) {
+  const check = () => keys.every((k) => loadedKeys.has(k));
+  const [ready, setReady] = useState(check);
+  useEffect(() => {
+    const on = () => { if (check()) setReady(true); };
+    on();
+    window.addEventListener('kutitap-loaded', on);
+    return () => window.removeEventListener('kutitap-loaded', on);
+  }, []);
+  return ready;
+}
+
 function useFirebaseSync(key, initialValue) {
   const [storedValue, setStoredValue] = useState(initialValue);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -130,6 +159,8 @@ function useFirebaseSync(key, initialValue) {
     const finishLoad = () => {
       if (!loadedRef.current) {
         loadedRef.current = true;
+        loadedKeys.add(key);
+        window.dispatchEvent(new Event('kutitap-loaded'));
         const pending = pendingRef.current;
         pendingRef.current = [];
         if (pending.length > 0) {
@@ -177,7 +208,7 @@ function useFirebaseSync(key, initialValue) {
     await persist(valueToStore);
   };
 
-  return [storedValue, setValue];
+  return [storedValue, setValue, isLoaded];
 }
 
 // 8-bit blips + pixel sparkles on every press. Purely cosmetic; has its own mute toggle.
@@ -263,20 +294,21 @@ function PixelFX() {
       lastKey = now;
       tone([[900 + Math.random() * 250, 0.025]], 0.015);
     };
+    const SONGS = {
+      drop: [[300, 0.05], [240, 0.06], [180, 0.08]], grab: [[200, 0.05], [260, 0.06]], miss: [[300, 0.1], [220, 0.12], [160, 0.2]],
+      win: [[523, 0.08], [659, 0.08], [784, 0.08], [1047, 0.2]], coin: [[988, 0.07], [1319, 0.18]], buy: [[660, 0.06], [880, 0.06], [1175, 0.1]],
+      rare: [[523, 0.08], [659, 0.08], [784, 0.08], [1047, 0.08], [1319, 0.08], [1568, 0.3]], cat: [[784, 0.07], [988, 0.07], [1175, 0.07], [1568, 0.22]],
+      munch: [[330, 0.05], [262, 0.05], [330, 0.05], [262, 0.05]], angry: [[196, 0.1], [185, 0.1], [175, 0.1], [147, 0.25]],
+      sing: [[523, 0.12], [659, 0.12], [784, 0.12], [1047, 0.2], [880, 0.12], [784, 0.12], [659, 0.12], [784, 0.2], [1047, 0.12], [1175, 0.12], [1319, 0.12], [1568, 0.34]]
+    };
     const onSfx = (e) => {
       const d = e.detail || {};
       const cx = d.x !== undefined ? d.x : window.innerWidth / 2;
       const cy = d.y !== undefined ? d.y : window.innerHeight / 2;
-      if (d.type === 'drop') tone([[300, 0.05], [240, 0.06], [180, 0.08]]);
-      else if (d.type === 'grab') tone([[200, 0.05], [260, 0.06]]);
-      else if (d.type === 'miss') tone([[300, 0.1], [220, 0.12], [160, 0.2]]);
-      else if (d.type === 'win') {
-        tone([[523, 0.08], [659, 0.08], [784, 0.08], [1047, 0.2]]);
-        burst(cx, cy, 16, ['#ffd86b', '#f0589a', '#9be58a', '#fff3d4']);
-      } else if (d.type === 'cat') {
-        tone([[784, 0.07], [988, 0.07], [1175, 0.07], [1568, 0.22]]);
-        burst(cx, cy, 16, ['#f0589a', '#ffd86b', '#fff3d4']);
-      }
+      if (SONGS[d.type]) tone(SONGS[d.type], d.type === 'angry' ? 0.05 : 0.035);
+      if (d.type === 'win' || d.type === 'cat' || d.type === 'sing') burst(cx, cy, 16, ['#ffd86b', '#f0589a', '#9be58a', '#fff3d4']);
+      if (d.type === 'rare') burst(cx, cy, 24, ['#ffd84a', '#fff3d4', '#f0589a']);
+      if (d.type === 'angry') burst(cx, cy, 8, ['#e23c3c', '#4a1d36']);
     };
     window.addEventListener('kutitap-sfx', onSfx);
     document.addEventListener('pointerdown', onDown, true);
@@ -323,43 +355,141 @@ function PixelMeter({ pct, tone = 'pink', segments = 12 }) {
 }
 
 // ---------------------------------------------------------------------------
-// Bill Buddy: the cat on the Income & Expense tab.
-// Purely presentational: it only receives how many "Not Paid" boxes are left.
+// Kutitap game helpers (Star Coins, monthly tastes, time of day)
 // ---------------------------------------------------------------------------
-function PixelCat({ unpaid, total, monthName }) {
+const STAR_DEFAULT = { coins: 0, pantry: {}, tried: {}, caught: {}, day: '', roundsUsed: 0, bonusRounds: 0, bonusAwarded: {}, baselineDone: false };
+const DAILY_ROUNDS = 5;
+const TRIES_PER_ROUND = 5;
+const RARE_COINS = 5;
+const roundReward = (wins, rareCaught) => (rareCaught ? RARE_COINS : wins >= 5 ? 3 : wins >= 3 ? 2 : wins >= 1 ? 1 : 0);
+
+const hashStr = (s) => {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+};
+const localDay = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const tasteMonthKey = (d = new Date()) => localDay(d).slice(0, 7);
+
+// Every month Kutitap loves 2 foods, hates 2 and is fine with the rest. The picks come from the month itself,
+// so they are the same on every device and nothing extra has to be saved.
+const tasteCache = {};
+const tasteMap = (monthKey) => {
+  if (!tasteCache[monthKey]) {
+    const ranked = ALL_FOODS.map((f) => ({ id: f.id, score: hashStr(`${monthKey}|${f.id}`) })).sort((a, b) => a.score - b.score);
+    tasteCache[monthKey] = { loved: ranked.slice(0, 2).map((r) => r.id), hated: ranked.slice(2, 4).map((r) => r.id) };
+  }
+  return tasteCache[monthKey];
+};
+const tasteOf = (monthKey, id) => {
+  const t = tasteMap(monthKey);
+  return t.loved.includes(id) ? 'love' : t.hated.includes(id) ? 'hate' : 'ok';
+};
+// A gentle hint: which shelves hide the loved foods (plus one decoy) and which ones to be careful with.
+const cravingHint = (monthKey) => {
+  const t = tasteMap(monthKey);
+  const lovedSets = [...new Set(t.loved.map((id) => FOOD_BY_ID[id].setName))];
+  const hatedSets = [...new Set(t.hated.map((id) => FOOD_BY_ID[id].setName))];
+  let i = hashStr(`${monthKey}|decoy`) % FOOD_SETS.length;
+  while (lovedSets.includes(FOOD_SETS[i].name)) i = (i + 1) % FOOD_SETS.length;
+  const craving = [...lovedSets, FOOD_SETS[i].name].sort((a, b) => hashStr(`${monthKey}${a}`) - hashStr(`${monthKey}${b}`));
+  return { craving, hatedSets };
+};
+const todOf = (d) => {
+  const h = d.getHours();
+  return h >= 5 && h < 10 ? 'morning' : h >= 10 && h < 16 ? 'day' : h >= 16 && h < 19 ? 'sunset' : 'night';
+};
+const sfx = (type, extra = {}) => window.dispatchEvent(new CustomEvent('kutitap-sfx', { detail: { type, ...extra } }));
+function useNow(ms = 60000) {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), ms);
+    return () => clearInterval(t);
+  }, [ms]);
+  return now;
+}
+const StarCoin = ({ size = 20 }) => <img className="px-sprite" src={spStarCoin} alt="Star Coin" style={{ width: size, height: 'auto' }} />;
+
+// ---------------------------------------------------------------------------
+// Kutitap - Your Kash Kasama (Income & Expense tab)
+// Mood = bills only. Feeding just triggers a short reaction.
+// ---------------------------------------------------------------------------
+function KutitapPanel({ unpaid, total, now, star, setStar, onOpenShop }) {
   const paid = total - unpaid;
   const allPaid = total > 0 && unpaid === 0;
   const pct = total > 0 ? Math.round((paid / total) * 100) : 0;
   const mood = total === 0 ? 'sleep' : allPaid ? 'happy' : paid > 0 ? 'ok' : 'sad';
+  const tod = todOf(now);
+  const monthKey = tasteMonthKey(now);
+  const monthName = now.toLocaleString('en-US', { month: 'long' });
 
-  // little victory dance the moment the last box flips to Paid
   const [cheer, setCheer] = useState(false);
   const wasAllPaid = useRef(allPaid);
   useEffect(() => {
     let timer;
     if (allPaid && !wasAllPaid.current) {
       setCheer(true);
-      window.dispatchEvent(new CustomEvent('kutitap-sfx', { detail: { type: 'cat' } }));
+      sfx('cat');
       timer = setTimeout(() => setCheer(false), 2600);
     }
     wasAllPaid.current = allPaid;
     return () => clearTimeout(timer);
   }, [allPaid]);
 
-  const message = {
-    sleep: 'Nothing to pay yet. Kitty is napping...',
-    sad: `${unpaid} unpaid box${unpaid === 1 ? '' : 'es'}! Kitty is worried...`,
-    ok: `${unpaid} more to go! Kitty is getting hopeful...`,
-    happy: 'Every box is paid! Kitty is so happy!'
-  }[mood];
+  const [reaction, setReaction] = useState(null);
+  const reactionTimer = useRef(null);
+  useEffect(() => () => clearTimeout(reactionTimer.current), []);
+
+  const feed = (id) => {
+    const food = FOOD_BY_ID[id];
+    if (!food || reaction) return;
+    const taste = tasteOf(monthKey, id);
+    setStar((prev) => {
+      const have = (prev.pantry || {})[id] || 0;
+      if (have <= 0) return prev;
+      const pantry = { ...(prev.pantry || {}) };
+      if (have - 1 > 0) pantry[id] = have - 1; else delete pantry[id];
+      const tried = { ...(prev.tried || {}) };
+      tried[monthKey] = { ...(tried[monthKey] || {}), [id]: taste };
+      return { ...prev, pantry, tried };
+    });
+    setReaction({ taste, food });
+    sfx(taste === 'love' ? 'sing' : taste === 'hate' ? 'angry' : 'munch');
+    clearTimeout(reactionTimer.current);
+    reactionTimer.current = setTimeout(() => setReaction(null), taste === 'love' ? 4800 : 3200);
+  };
+
+  const hint = cravingHint(monthKey);
+  const tried = (star.tried || {})[monthKey] || {};
+  const found = Object.entries(tried).filter(([, t]) => t !== 'ok');
+  const pantry = Object.entries(star.pantry || {}).filter(([id, n]) => n > 0 && FOOD_BY_ID[id]);
+
+  const message = reaction
+    ? reaction.taste === 'love' ? `♪ Yummy! ${reaction.food.name} is my favorite this month! ♪`
+      : reaction.taste === 'hate' ? `Ew... I do NOT like ${reaction.food.name}!`
+      : `Nom nom... ${reaction.food.name} is alright.`
+    : {
+      sleep: 'Nothing to pay yet. Kutitap is napping...',
+      sad: `${unpaid} unpaid box${unpaid === 1 ? '' : 'es'}! Kutitap is worried...`,
+      ok: `${unpaid} more to go! Kutitap is getting hopeful...`,
+      happy: 'Every box is paid! Kutitap is so happy!'
+    }[mood];
+
+  const stars = [[6, 10, 0, 10], [18, 34, 0.5, 15], [30, 12, 1, 10], [44, 40, 0.2, 10], [58, 14, 0.8, 15], [70, 38, 1.3, 10], [82, 12, 0.4, 10], [92, 30, 0.9, 15], [12, 62, 1.1, 10], [50, 8, 1.5, 10]];
 
   return (
     <div style={{ background: 'var(--px-card)', borderRadius: 0, '--px': 'panel', padding: '16px', textAlign: 'center', width: '100%', flexShrink: 0, boxShadow: '0 8px 25px rgba(223,177,91,0.15)' }}>
-      <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--px-accent)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-        <Sprite src={spHeart} className="px-heart-icon" /> Bill Buddy · {monthName}
+      <div className="kt-title">
+        <Sprite src={spHeart} className="px-heart-icon" /> <span>Kutitap · Your Kash Kasama</span>
+        <span className="kt-wallet"><StarCoin size={18} />{(star.coins || 0).toLocaleString()}</span>
       </div>
 
-      <div className={`px-meadow px-meadow-${mood}`}>
+      <div className={`px-meadow tod-${tod} px-meadow-${reaction && reaction.taste === 'hate' ? 'sad' : mood}`}>
+        {tod === 'night' && stars.map(([l, t, d, w]) => <img key={l} className="px-sprite kt-star" src={spTwinkle} alt="" style={{ left: `${l}%`, top: t, animationDelay: `${d}s`, width: w }} />)}
+        {tod === 'night' && <img className="px-sprite kt-sky-obj" src={spMoon} alt="" style={{ left: 16, top: 10, width: 30 }} />}
+        {(tod === 'morning' || tod === 'day') && <img className="px-sprite kt-sky-obj" src={spSun} alt="" style={tod === 'morning' ? { left: 12, bottom: 70, width: 34 } : { left: 16, top: 10, width: 30 }} />}
+        {tod === 'sunset' && <img className="px-sprite kt-sky-obj" src={spSun} alt="" style={{ left: '16%', bottom: 60, width: 40 }} />}
+        {tod !== 'night' && <img className="px-sprite kt-sky-obj" src={spCloud} alt="" style={{ left: '44%', top: 12, width: 44, opacity: 0.9 }} />}
         <img className="px-sprite px-scene px-scene-tree" src={scTree} alt="" />
         <img className="px-sprite px-scene px-scene-bush" src={scBush} alt="" />
         <img className="px-sprite px-scene px-scene-fy" src={scFlowerY} alt="" />
@@ -367,28 +497,42 @@ function PixelCat({ unpaid, total, monthName }) {
         <img className="px-sprite px-scene px-scene-fb" src={scFlowerB} alt="" />
         <img className="px-sprite px-scene px-scene-mush" src={scMush} alt="" />
 
-        {mood === 'sleep' && (
+        {reaction && reaction.taste === 'love' && (
           <>
-            <img className="px-sprite px-cat-sleep" src={catSleep} alt="Sleeping kitty" />
+            <img className="px-sprite px-cat px-cat-cheer" style={{ animationIterationCount: 'infinite' }} src={catHappy} alt="Singing Kutitap" />
+            {[34, 44, 56, 64].map((l, i) => <img key={l} className="px-sprite kt-note" src={spNote} alt="" style={{ left: `${l}%`, animationDelay: `${i * 0.4}s` }} />)}
+          </>
+        )}
+        {reaction && reaction.taste === 'hate' && (
+          <>
+            <img className="px-sprite px-cat px-cat-sad" src={catAngry} alt="Angry Kutitap" />
+            <img className="px-sprite kt-anger" src={spAnger} alt="" />
+          </>
+        )}
+        {reaction && reaction.taste === 'ok' && <img className="px-sprite px-cat kt-munch" src={catHappy} alt="Munching Kutitap" />}
+
+        {!reaction && mood === 'sleep' && (
+          <>
+            <img className="px-sprite px-cat-sleep" src={catSleep} alt="Sleeping Kutitap" />
             <span className="px-zzz px-zzz-1">z</span>
             <span className="px-zzz px-zzz-2">Z</span>
           </>
         )}
-        {mood === 'sad' && (
+        {!reaction && mood === 'sad' && (
           <>
-            <img className="px-sprite px-cat px-cat-sad" src={catSad} alt="Worried kitty" />
+            <img className="px-sprite px-cat px-cat-sad" src={catSad} alt="Worried Kutitap" />
             <span className="px-sweat" />
           </>
         )}
-        {mood === 'ok' && <div className="px-sprite px-cat px-cat-fidget" role="img" aria-label="Hopeful kitty" style={{ backgroundImage: `url(${catWalkDown})` }} />}
-        {mood === 'happy' && cheer && <img className="px-sprite px-cat px-cat-cheer" src={catHappy} alt="Happy kitty" />}
-        {mood === 'happy' && !cheer && (
+        {!reaction && mood === 'ok' && <div className="px-sprite px-cat px-cat-fidget" role="img" aria-label="Hopeful Kutitap" style={{ backgroundImage: `url(${catWalkDown})` }} />}
+        {!reaction && mood === 'happy' && cheer && <img className="px-sprite px-cat px-cat-cheer" src={catHappy} alt="Happy Kutitap" />}
+        {!reaction && mood === 'happy' && !cheer && (
           <>
-            <div className="px-sprite px-walker px-walk-r" role="img" aria-label="Happy kitty" style={{ backgroundImage: `url(${catWalkRight})` }} />
+            <div className="px-sprite px-walker px-walk-r" role="img" aria-label="Happy Kutitap" style={{ backgroundImage: `url(${catWalkRight})` }} />
             <div className="px-sprite px-walker px-walk-l" aria-hidden="true" style={{ backgroundImage: `url(${catWalkLeft})` }} />
           </>
         )}
-        {mood === 'happy' && [8, 24, 40, 58, 74, 88].map((left, i) => (
+        {((!reaction && mood === 'happy') || (reaction && reaction.taste === 'love')) && [8, 24, 40, 58, 74, 88].map((left, i) => (
           <img key={left} className="px-sprite px-heart" src={spHeart} alt="" style={{ left: `${left}%`, animationDelay: `${i * 0.35}s` }} />
         ))}
       </div>
@@ -399,13 +543,133 @@ function PixelCat({ unpaid, total, monthName }) {
         <PixelMeter pct={pct} tone={allPaid ? 'green' : 'pink'} segments={10} />
         <span>{paid}/{total} paid</span>
       </div>
+      <div className="kt-note-line">Happiness depends only on your bills. Food just triggers a short reaction.</div>
+
+      <div className="kt-cravings">
+        <b>{monthName} cravings</b>
+        <span>Kutitap is craving something from: <em className="yum">{hint.craving.join(' · ')}</em></span>
+        <span>Tummy ache from: <em className="yuck">{hint.hatedSets.join(' · ')}</em></span>
+        <span className="kt-found">
+          {found.length === 0 ? 'Feed Kutitap to find its favorites! (tastes change every month)' : found.map(([id, t]) => (
+            <em key={id} className={t === 'love' ? 'yum' : 'yuck'}>{t === 'love' ? '♥ Yummy' : '✖ Yucky'}: {FOOD_BY_ID[id].name}</em>
+          ))}
+        </span>
+      </div>
+
+      <div className="kt-pantry">
+        <span className="kt-pantry-label">PANTRY</span>
+        {pantry.length === 0 && <span className="kt-pantry-empty">Empty. Win Star Coins in the claw machine, then shop!</span>}
+        {pantry.map(([id, n]) => (
+          <div key={id} className="kt-pitem">
+            <img className="px-sprite" src={FOOD_BY_ID[id].src} alt={FOOD_BY_ID[id].name} title={FOOD_BY_ID[id].name} />
+            <b>x{n}</b>
+            <button onClick={() => feed(id)} disabled={!!reaction} style={{ backgroundColor: 'var(--px-pink)', color: '#FFFFFF', borderRadius: 0, '--px': 'pill', padding: '5px 10px', fontWeight: 800, fontSize: '11px', opacity: reaction ? 0.5 : 1 }}>Feed</button>
+          </div>
+        ))}
+      </div>
+      <button onClick={onOpenShop} style={{ backgroundColor: 'var(--px-sun)', color: 'var(--ink)', borderRadius: 0, '--px': 'pill', padding: '10px 16px', fontWeight: 800, fontSize: '13px', marginTop: '14px', width: '100%' }}>
+        ★ Visit the Star Snack Shop
+      </button>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Claw machine (dashboard). Self-contained: it only touches its own state and
-// remembers the prizes you collected in localStorage (device only).
+// Star Snack Shop: buy foods with Star Coins (run by the bunny)
+// ---------------------------------------------------------------------------
+function StarShop({ star, setStar, now, onClose }) {
+  const [tab, setTab] = useState(FOOD_SETS[0].id);
+  const [say, setSay] = useState('');
+  const [justBought, setJustBought] = useState(null);
+  const monthKey = tasteMonthKey(now);
+  const hint = cravingHint(monthKey);
+  const tried = (star.tried || {})[monthKey] || {};
+  const coins = star.coins || 0;
+  const set = FOOD_SETS.find((s) => s.id === tab) || FOOD_SETS[0];
+  const talk = say || `Welcome! Kutitap is craving something from the ${hint.craving.join(', ')} this month...`;
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const buy = (food) => {
+    if (coins < food.price) {
+      setSay('Not enough Star Coins! Try the claw machine on the Dashboard.');
+      sfx('miss');
+      return;
+    }
+    setStar((prev) => {
+      const c = prev.coins || 0;
+      if (c < food.price) return prev;
+      return { ...prev, coins: c - food.price, pantry: { ...(prev.pantry || {}), [food.id]: ((prev.pantry || {})[food.id] || 0) + 1 } };
+    });
+    setSay(`Thank you! One ${food.name} for Kutitap. Maybe it will love it!`);
+    setJustBought(food.id);
+    setTimeout(() => setJustBought(null), 700);
+    sfx('buy');
+  };
+
+  return (
+    <div className="shop-overlay" onClick={onClose}>
+      <div className="shop-window" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Star Snack Shop">
+        <div className="shop-awn">{Array.from({ length: 16 }).map((_, i) => <i key={i} style={{ background: i % 2 === 0 ? 'var(--px-pink)' : '#fff3d4' }} />)}</div>
+        <div className="shop-sign">★ STAR SNACK SHOP ★</div>
+        <button onClick={onClose} aria-label="Close shop" className="shop-close" style={{ backgroundColor: 'var(--px-sun)', color: 'var(--ink)', borderRadius: 0, '--px': 'pill', width: '36px', height: '36px', fontWeight: 800 }}>X</button>
+
+        <div className="shop-scene">
+          <img className="px-sprite shop-door" src={shDoor} alt="" />
+          <img className="px-sprite shop-plant-a" src={shPlantA} alt="" />
+          <img className="px-sprite shop-plant-b" src={shPlantB} alt="" />
+          <div className="px-sprite shop-bunny" role="img" aria-label="Shopkeeper bunny" style={{ backgroundImage: `url(${shBunny})` }} />
+          <img className="px-sprite shop-counter" src={shCounter} alt="" />
+          <div className="px-cat-bubble shop-say" aria-live="polite">{talk}</div>
+          <div className="shop-wallet"><StarCoin size={24} /> {coins.toLocaleString()} <i>Star Coins</i></div>
+        </div>
+
+        <div className="shop-tabs" role="tablist">
+          {FOOD_SETS.map((s) => (
+            <button key={s.id} role="tab" aria-selected={s.id === tab} onClick={() => setTab(s.id)}
+              style={{ backgroundColor: s.id === tab ? 'var(--px-pink)' : '#FFFFFF', color: s.id === tab ? '#FFFFFF' : 'var(--ink)', borderRadius: 0, '--px': 'pill', padding: '6px 10px', fontWeight: 800, fontSize: '11px' }}>
+              {s.name}
+            </button>
+          ))}
+        </div>
+
+        <div className="shop-shelves">
+          {set.foods.map((food) => {
+            const t = tried[food.id];
+            const owned = (star.pantry || {})[food.id] || 0;
+            return (
+              <div key={food.id} className="shop-slot">
+                {t === 'love' && <span className="shop-tag yum">YUMMY!</span>}
+                {t === 'hate' && <span className="shop-tag yuck">YUCKY!</span>}
+                {t === 'ok' && <span className="shop-tag meh">okay</span>}
+                {food.rare && <span className="shop-tag rare">RARE</span>}
+                <div className={`shop-item${food.rare ? ' rare-glow' : ''}${justBought === food.id ? ' bought' : ''}`}>
+                  <img className="px-sprite" src={food.src} alt={food.name} />
+                  {owned > 0 && <b className="shop-owned">x{owned}</b>}
+                </div>
+                <div className="shop-plank" />
+                <span className="shop-price"><StarCoin size={16} />{food.price}</span>
+                <span className="shop-name">{food.name}</span>
+                <button onClick={() => buy(food)} style={{ backgroundColor: coins >= food.price ? 'var(--px-sun)' : '#E5D9C8', color: 'var(--ink)', borderRadius: 0, '--px': 'pill', padding: '5px 14px', fontWeight: 800, fontSize: '11px' }}>Buy</button>
+              </div>
+            );
+          })}
+        </div>
+        <div className="shop-credits">
+          Shopkeeper bunny: Little Dreamyland by Starmixu &amp; Utaskuas · Shop furniture: Cafe tiles pack · Scenery: Sprout Lands by Cup Nooble
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Claw machine (dashboard). Prize sets change every round. A round = 5 tries.
+// Star Coins are paid out only when a round finishes. Prizes are not kept.
 // ---------------------------------------------------------------------------
 const CLAW_W = 360;
 const CLAW_H = 440;
@@ -418,48 +682,44 @@ const CLAW_MIN_X = 30;
 const CLAW_MAX_X = 330;
 const CLAW_CHUTE_X = 46;
 const CLAW_SPEED = 170;
-const CLAW_TRIES = 5;
-const CLAW_PRIZES = [
-  { name: 'Strawberry', src: dsStrawberry },
-  { name: 'Cupcake', src: dsCupcake },
-  { name: 'Donut', src: dsDonut },
-  { name: 'Cake Slice', src: dsCakeSlice },
-  { name: 'Macaron', src: dsMacaron },
-  { name: 'Berry Tart', src: dsTart },
-  { name: 'Shortcake', src: dsShortcake },
-  { name: 'Roll Cake', src: dsRollCake }
-];
 let clawUid = 0;
 const clawClamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const clawWait = (ms) => new Promise((r) => setTimeout(r, ms));
+const pickClawSet = (excludeId) => {
+  const pool = FOOD_SETS.filter((s) => s.id !== excludeId);
+  return pool[Math.floor(Math.random() * pool.length)];
+};
 
-function makeClawPrizes() {
+function makeClawPrizes(set) {
+  const normals = set.foods.filter((f) => !f.rare);
+  const rare = set.foods.find((f) => f.rare);
   const list = [];
   [132, 170, 208, 246, 284, 322].forEach((cx) => {
     const n = 1 + Math.floor(Math.random() * 3);
     for (let r = 0; r < n; r++) {
       list.push({
         id: `cp${clawUid++}`,
-        kind: Math.floor(Math.random() * CLAW_PRIZES.length),
+        food: normals[Math.floor(Math.random() * normals.length)],
         x: cx + (Math.random() * 8 - 4),
         bottom: CLAW_FLOOR + r * 36 + Math.random() * 3,
         rot: Math.random() * 20 - 10
       });
     }
   });
+  // the rare food only shows up in about 1 of 3 rounds, on top of a random stack
+  if (rare && Math.random() < 0.35) {
+    const base = list[Math.floor(Math.random() * list.length)];
+    list.push({ id: `cp${clawUid++}`, food: rare, x: base.x, bottom: base.bottom + 30, rot: 0 });
+  }
   return list;
 }
 
-function ClawMachine() {
-  const [prizes, setPrizes] = useState(makeClawPrizes);
-  const [tries, setTries] = useState(CLAW_TRIES);
-  const [roundWins, setRoundWins] = useState(0);
-  const [won, setWon] = useState(() => {
-    try {
-      const v = JSON.parse(window.localStorage.getItem('kutitap_claw_prizes') || '[]');
-      return Array.isArray(v) ? v.filter((k) => Number.isInteger(k) && k >= 0 && k < CLAW_PRIZES.length) : [];
-    } catch (e) { return []; }
-  });
+function ClawMachine({ star, setStar, starLoaded, roundsLeft }) {
+  const [set, setSet] = useState(() => pickClawSet(''));
+  const [prizes, setPrizes] = useState(() => makeClawPrizes(set));
+  const [tries, setTries] = useState(TRIES_PER_ROUND);
+  const [wins, setWins] = useState(0);
+  const [reward, setReward] = useState(null);
   const [clawX, setClawX] = useState(180);
   const [rope, setRope] = useState(CLAW_REST);
   const [open, setOpen] = useState(true);
@@ -475,19 +735,17 @@ function ClawMachine() {
   const busyRef = useRef(false);
   const alive = useRef(true);
   const prizesRef = useRef(prizes);
+  const winsRef = useRef(0);
+  const rareRef = useRef(false);
   const dropRef = useRef(null);
   const wrapRef = useRef(null);
 
-  useEffect(() => { prizesRef.current = prizes; }, [prizes]);
-  useEffect(() => {
-    try { window.localStorage.setItem('kutitap_claw_prizes', JSON.stringify(won)); } catch (e) { /* ignore */ }
-  }, [won]);
-  useEffect(() => {
-    alive.current = true;
-    return () => { alive.current = false; };
-  }, []);
-
-  // scale the fixed-size stage to the panel width
+  const updatePrizes = (fn) => {
+    const next = typeof fn === 'function' ? fn(prizesRef.current) : fn;
+    prizesRef.current = next;
+    setPrizes(next);
+  };
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return undefined;
@@ -495,8 +753,6 @@ function ClawMachine() {
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-
-  // smooth left/right movement
   useEffect(() => {
     let raf;
     let last = performance.now();
@@ -513,15 +769,49 @@ function ClawMachine() {
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  const over = !busy && (tries <= 0 || prizes.length === 0);
-  const sfx = (type, extra = {}) => window.dispatchEvent(new CustomEvent('kutitap-sfx', { detail: { type, ...extra } }));
+  const noRounds = starLoaded && roundsLeft <= 0 && !reward && !busy && tries === TRIES_PER_ROUND;
+  const canPlay = starLoaded && roundsLeft > 0 && !reward;
+
+  const finishRound = () => {
+    const w = winsRef.current;
+    const rare = rareRef.current;
+    const coins = roundReward(w, rare);
+    setReward({ wins: w, rare, coins });
+    setStar((prev) => {
+      const today = localDay();
+      let used = prev.day === today ? prev.roundsUsed || 0 : 0;
+      let bonus = prev.bonusRounds || 0;
+      if (used < DAILY_ROUNDS) used += 1; else bonus = Math.max(0, bonus - 1);
+      return { ...prev, day: today, roundsUsed: used, bonusRounds: bonus, coins: (prev.coins || 0) + coins };
+    });
+    sfx(rare ? 'rare' : coins > 0 ? 'coin' : 'miss');
+  };
+
+  function startNextRound() {
+    const next = pickClawSet(set.id);
+    setSet(next);
+    updatePrizes(makeClawPrizes(next));
+    setTries(TRIES_PER_ROUND);
+    setWins(0);
+    winsRef.current = 0;
+    rareRef.current = false;
+    setReward(null);
+    setCarried(null);
+    setRope(CLAW_REST);
+    setOpen(true);
+    setAuto(false);
+    xRef.current = 180;
+    setClawX(180);
+    setMsg('New round! Line it up, then press Drop!');
+  }
 
   async function drop() {
-    if (busyRef.current || tries <= 0 || prizesRef.current.length === 0) return;
+    if (busyRef.current || !canPlay || tries <= 0 || prizesRef.current.length === 0) return;
     busyRef.current = true;
     dirRef.current = 0;
     setBusy(true);
-    setTries((t) => t - 1);
+    const triesAfter = tries - 1;
+    setTries(triesAfter);
     setMsg('Going down...');
     sfx('drop');
 
@@ -543,10 +833,11 @@ function ClawMachine() {
     sfx('grab');
     if (!(await step(550))) return;
 
-    const chance = hit ? (hit.dx <= 8 ? 0.92 : hit.dx <= 16 ? 0.65 : 0.3) : 0;
+    let chance = hit ? (hit.dx <= 8 ? 0.92 : hit.dx <= 16 ? 0.65 : 0.3) : 0;
+    if (hit && hit.p.food.rare) chance *= 0.7; // the rare one has a slippery grip
     const got = hit && Math.random() < chance ? hit.p : null;
     if (got) {
-      setPrizes((ps) => ps.filter((p) => p.id !== got.id));
+      updatePrizes((ps) => ps.filter((p) => p.id !== got.id));
       setCarried(got);
       setMsg('Got one! Hold on...');
     } else {
@@ -562,12 +853,12 @@ function ClawMachine() {
       if (slip) {
         const midBottom = CLAW_H - ((ropeTarget + CLAW_REST) / 2 + CLAW_RAIL + CLAW_HEAD) - CLAW_PRIZE / 2;
         setCarried(null);
-        setPrizes((ps) => [...ps, { ...got, bottom: midBottom }]);
+        updatePrizes((ps) => [...ps, { ...got, bottom: midBottom }]);
         setMsg('Oh no, it slipped!');
         sfx('miss');
         kept = null;
         await clawWait(30);
-        setPrizes((ps) => ps.map((p) => (p.id === got.id ? { ...p, bottom: got.bottom } : p)));
+        updatePrizes((ps) => ps.map((p) => (p.id === got.id ? { ...p, bottom: got.bottom } : p)));
       }
       if (!(await step(550))) return;
     } else if (!(await step(1000))) return;
@@ -580,18 +871,20 @@ function ClawMachine() {
 
     setOpen(true);
     if (kept) {
-      const kind = kept.kind;
+      const food = kept.food;
       setCarried(null);
-      setPrizes((ps) => [...ps, { ...kept, x: CLAW_CHUTE_X, bottom: CLAW_H - 62 - CLAW_PRIZE, rot: 0 }]);
+      updatePrizes((ps) => [...ps, { ...kept, x: CLAW_CHUTE_X, bottom: CLAW_H - 62 - CLAW_PRIZE, rot: 0 }]);
       await clawWait(30);
-      setPrizes((ps) => ps.map((p) => (p.id === kept.id ? { ...p, bottom: CLAW_FLOOR + 14 } : p)));
+      updatePrizes((ps) => ps.map((p) => (p.id === kept.id ? { ...p, bottom: CLAW_FLOOR + 14 } : p)));
       if (!(await step(750))) return;
-      setPrizes((ps) => ps.filter((p) => p.id !== kept.id));
-      setWon((w) => [...w, kind]);
-      setRoundWins((n) => n + 1);
-      const name = CLAW_PRIZES[kind].name;
-      setMsg(`You won a ${name}!`);
-      setFlash(name);
+      updatePrizes((ps) => ps.filter((p) => p.id !== kept.id));
+      winsRef.current += 1;
+      if (food.rare) rareRef.current = true;
+      setWins(winsRef.current);
+      // remember which prizes have been caught (the shadow row)
+      setStar((prev) => ({ ...prev, caught: { ...(prev.caught || {}), [food.id]: ((prev.caught || {})[food.id] || 0) + 1 } }));
+      setMsg(food.rare ? `RARE CATCH! ${food.name}!` : `You caught a ${food.name}!`);
+      setFlash(food.rare ? `RARE! ${food.name}` : food.name);
       sfx('win');
       setTimeout(() => setFlash(null), 1700);
     } else if (!(await step(300))) return;
@@ -601,28 +894,16 @@ function ClawMachine() {
     setAuto(false);
     busyRef.current = false;
     setBusy(false);
+    if (triesAfter <= 0 || prizesRef.current.length === 0) finishRound();
   }
   dropRef.current = drop;
-
-  function reset() {
-    setPrizes(makeClawPrizes());
-    setTries(CLAW_TRIES);
-    setRoundWins(0);
-    setCarried(null);
-    setRope(CLAW_REST);
-    setOpen(true);
-    setAuto(false);
-    xRef.current = 180;
-    setClawX(180);
-    setMsg('Line it up, then press Drop!');
-  }
 
   const onKeyDown = (e) => {
     const k = e.key.toLowerCase();
     if (k === 'arrowleft' || k === 'a') { dirRef.current = -1; e.preventDefault(); }
     else if (k === 'arrowright' || k === 'd') { dirRef.current = 1; e.preventDefault(); }
     else if ((k === ' ' || k === 'enter') && e.target.tagName === 'BUTTON') { /* the focused button handles it */ }
-    else if (k === ' ' || k === 'enter' || k === 'arrowdown') { e.preventDefault(); if (!e.repeat) dropRef.current && dropRef.current(); }
+    else if (k === ' ' || k === 'enter' || k === 'arrowdown') { e.preventDefault(); if (!e.repeat && dropRef.current) dropRef.current(); }
   };
   const onKeyUp = (e) => {
     const k = e.key.toLowerCase();
@@ -637,9 +918,8 @@ function ClawMachine() {
   });
 
   const glide = auto ? 'left 1.1s ease-in-out' : 'none';
-  const locked = busy || over;
-  const counts = CLAW_PRIZES.map((_, i) => won.filter((k) => k === i).length);
-  const collected = counts.filter((c) => c > 0).length;
+  const locked = busy || !canPlay;
+  const caught = star.caught || {};
   const btn = { borderRadius: 0, '--px': 'pill', height: '52px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', cursor: locked ? 'not-allowed' : 'pointer', touchAction: 'none', fontWeight: 800, fontSize: '15px', opacity: locked ? 0.5 : 1 };
 
   return (
@@ -653,16 +933,20 @@ function ClawMachine() {
     >
       <div className="claw-marquee">
         <span className="claw-title">Claw Catch</span>
+        <span className="kt-wallet"><StarCoin size={18} />{(star.coins || 0).toLocaleString()}</span>
         <span className="claw-lives" aria-label={`${tries} tries left`}>
-          {Array.from({ length: CLAW_TRIES }).map((_, i) => (
+          {Array.from({ length: TRIES_PER_ROUND }).map((_, i) => (
             <img key={i} src={spHeart} alt="" className={`px-sprite claw-heart${i < tries ? '' : ' off'}`} />
           ))}
         </span>
       </div>
+      <div className="claw-chips">
+        <span>Rounds left <b>{roundsLeft}</b></span>
+        {(star.bonusRounds || 0) > 0 && <span className="claw-chip bonus">+{star.bonusRounds} bonus</span>}
+        <span className="claw-chip set">{set.name}</span>
+      </div>
       <div className="claw-bulbs" aria-hidden="true">
-        {Array.from({ length: 16 }).map((_, i) => (
-          <span key={i} className="claw-bulb" style={{ animationDelay: `${(i % 4) * 0.25}s` }} />
-        ))}
+        {Array.from({ length: 16 }).map((_, i) => <span key={i} className="claw-bulb" style={{ animationDelay: `${(i % 4) * 0.25}s` }} />)}
       </div>
 
       <div ref={wrapRef} className="claw-glass" style={{ height: CLAW_H * scale }}>
@@ -670,44 +954,46 @@ function ClawMachine() {
           <div className="claw-floor" />
           <div className="claw-rail" />
           <div className="claw-carriage" style={{ left: clawX, transition: glide }} />
-
           <div className="claw-chute-back" />
           <div className="claw-chute-lip"><span>PRIZE</span></div>
 
           {prizes.map((p) => (
-            <div key={p.id} className="claw-prize" style={{ left: p.x - CLAW_PRIZE / 2, bottom: p.bottom, transform: `rotate(${p.rot}deg)` }}>
-              <img className="px-sprite" src={CLAW_PRIZES[p.kind].src} alt="" style={{ width: CLAW_PRIZE, height: CLAW_PRIZE }} />
+            <div key={p.id} className={`claw-prize${p.food.rare ? ' rare-glow' : ''}`} style={{ left: p.x - CLAW_PRIZE / 2, bottom: p.bottom, transform: `rotate(${p.rot}deg)` }}>
+              <img className="px-sprite" src={p.food.src} alt="" style={{ width: CLAW_PRIZE, height: CLAW_PRIZE, objectFit: 'contain' }} />
             </div>
           ))}
 
           <div className="claw-unit" style={{ left: clawX, top: CLAW_RAIL, transition: glide }}>
             <div className="claw-rope" style={{ height: rope }} />
             <div className="claw-head" style={{ height: CLAW_HEAD }}>
-              {carried && (
-                <img className="px-sprite claw-carried" src={CLAW_PRIZES[carried.kind].src} alt="" style={{ width: CLAW_PRIZE, height: CLAW_PRIZE }} />
-              )}
+              {carried && <img className="px-sprite claw-carried" src={carried.food.src} alt="" style={{ width: CLAW_PRIZE, height: CLAW_PRIZE, objectFit: 'contain' }} />}
               <div className="claw-hub" />
-              {[1, -1].map((side) => (
-                <div key={side} className="claw-arm" style={{ transform: `rotate(${side * (open ? 36 : 10)}deg)` }} />
-              ))}
+              {[1, -1].map((side) => <div key={side} className="claw-arm" style={{ transform: `rotate(${side * (open ? 36 : 10)}deg)` }} />)}
             </div>
           </div>
 
-          {flash && <div className="claw-flash">You won a {flash}!</div>}
+          {flash && <div className="claw-flash">{flash}!</div>}
 
-          {over && (
+          {reward && (
             <div className="claw-end">
               <div className="claw-end-card">
-                <div className="claw-end-title">{prizes.length === 0 ? 'Machine cleared!' : 'Out of tries!'}</div>
-                <div className="claw-end-sub">
-                  {roundWins === 0 ? 'No prizes this round.' : `You won ${roundWins} prize${roundWins > 1 ? 's' : ''} this round.`}
-                </div>
-                <button
-                  onClick={reset}
-                  style={{ backgroundColor: 'var(--px-pink)', color: '#FFFFFF', borderRadius: 0, '--px': 'pill', padding: '10px 18px', fontWeight: 800, fontSize: '13px', cursor: 'pointer', marginTop: '12px' }}
-                >
-                  Play again
-                </button>
+                <div className="claw-end-title">{reward.rare ? 'RARE CATCH!' : prizes.length === 0 ? 'Machine cleared!' : 'Round over!'}</div>
+                <div className="claw-end-sub">{reward.wins === 0 ? 'No prizes this round.' : `${reward.wins} prize${reward.wins > 1 ? 's' : ''} caught`}</div>
+                <div className="claw-reward"><StarCoin size={32} /><span>{reward.coins > 0 ? `+${reward.coins} Star Coin${reward.coins > 1 ? 's' : ''}` : '+0 Star Coins'}</span></div>
+                {reward.rare && <div className="claw-small">Rare food = flat {RARE_COINS} coins for the round</div>}
+                {roundsLeft > 0 ? (
+                  <button onClick={startNextRound} style={{ backgroundColor: 'var(--px-pink)', color: '#FFFFFF', borderRadius: 0, '--px': 'pill', padding: '10px 18px', fontWeight: 800, fontSize: '13px', marginTop: '12px' }}>Next round ({roundsLeft} left)</button>
+                ) : (
+                  <div className="claw-small" style={{ marginTop: '10px' }}>No rounds left. Pay a bill for a bonus round, or come back tomorrow!</div>
+                )}
+              </div>
+            </div>
+          )}
+          {noRounds && (
+            <div className="claw-end">
+              <div className="claw-end-card">
+                <div className="claw-end-title">No rounds left</div>
+                <div className="claw-end-sub">Pay a bill to earn a bonus round,<br />or come back tomorrow!</div>
               </div>
             </div>
           )}
@@ -715,7 +1001,6 @@ function ClawMachine() {
       </div>
 
       <div className="claw-msg" aria-live="polite">{msg}</div>
-
       <div className="claw-controls">
         <button {...hold(-1)} disabled={locked} aria-label="Move claw left" style={{ ...btn, backgroundColor: 'var(--px-sun)', color: 'var(--ink)' }}>
           <ChevronLeft style={{ width: '24px', height: '24px' }} />
@@ -728,14 +1013,15 @@ function ClawMachine() {
         </button>
       </div>
       <div className="claw-hint">Click the machine, then use ← → and Space</div>
+      <div className="claw-rules">5 prizes = 3 · 3-4 = 2 · 1-2 = 1 · rare food = {RARE_COINS} Star Coins</div>
 
       <div className="claw-collection-wrap">
-        <div className="claw-coll-label">Collection {collected}/{CLAW_PRIZES.length}</div>
+        <div className="claw-coll-label">Prize shadows · {set.foods.filter((f) => caught[f.id] > 0).length}/{set.foods.length}</div>
         <div className="claw-collection">
-          {CLAW_PRIZES.map((pz, i) => (
-            <div key={pz.name} className={`claw-slot${counts[i] ? ' got' : ''}`} title={counts[i] ? `${pz.name} x${counts[i]}` : '???'}>
-              <img className="px-sprite" src={pz.src} alt={counts[i] ? pz.name : 'Not won yet'} />
-              {counts[i] > 1 && <b>x{counts[i]}</b>}
+          {set.foods.map((f) => (
+            <div key={f.id} className={`claw-slot${caught[f.id] ? ' got' : ''}${f.rare ? ' rare-slot' : ''}`} title={caught[f.id] ? `${f.name} x${caught[f.id]}` : '???'}>
+              <img className="px-sprite" src={f.src} alt={caught[f.id] ? f.name : 'Not caught yet'} />
+              {caught[f.id] > 1 && <b>x{caught[f.id]}</b>}
             </div>
           ))}
         </div>
@@ -1576,6 +1862,40 @@ export default function App() {
     { id: 'attendance', label: 'Attendance', icon: CalendarCheck },
   ];
 
+  // ---- Kutitap game: Star Coins, pantry, rounds (all saved to Firebase) ----
+  const [kStar, setKStar, kStarLoaded] = useFirebaseSync('kutitap_star', STAR_DEFAULT);
+  const [isShopOpen, setIsShopOpen] = useState(false);
+  const kNow = useNow(60000);
+  const kToday = localDay(kNow);
+  const kDataReady = useDataReady(['kutitap_star', 'kutitap_utilities', 'kutitap_savings', 'kutitap_expenses', 'kutitap_loans']);
+  const kRoundsLeft = Math.max(0, DAILY_ROUNDS - (kStar.day === kToday ? kStar.roundsUsed || 0 : 0)) + (kStar.bonusRounds || 0);
+
+  // every bill that is marked Paid (once per bill per month) earns one bonus round
+  const kPaidKeys = [];
+  Object.entries(utilityBills || {}).forEach(([mk, bills]) => Object.entries(bills || {}).forEach(([n, b]) => { if (b && b.paid) kPaidKeys.push(`u|${mk}|${n}`); }));
+  (savingsGoals || []).forEach((g) => (g.monthsList || []).forEach((m) => { if (m && m.paid) kPaidKeys.push(`s|${g.id}|${m.monthKey}`); }));
+  Object.entries(monthlyExpenses || {}).forEach(([mk, list]) => (list || []).forEach((e) => { if (e && e.paid) kPaidKeys.push(`e|${mk}|${e.id}`); }));
+  Object.entries(loanTableData || {}).forEach(([cat, d]) => Object.entries((d && d.paidCells) || {}).forEach(([rk, cols]) => Object.entries(cols || {}).forEach(([col, v]) => { if (v) kPaidKeys.push(`l|${cat}|${rk}|${col}`); })));
+  const kPaidSig = kPaidKeys.join('\n');
+
+  useEffect(() => {
+    if (!kStarLoaded || kStar.day === kToday) return;
+    setKStar((prev) => (prev.day === kToday ? prev : { ...prev, day: kToday, roundsUsed: 0 }));
+  }, [kStarLoaded, kToday, kStar.day]);
+
+  useEffect(() => {
+    if (!kDataReady) return;
+    setKStar((prev) => {
+      const awarded = prev.bonusAwarded || {};
+      const fresh = kPaidKeys.filter((k) => !awarded[k]);
+      if (fresh.length === 0 && prev.baselineDone) return prev;
+      const nextAwarded = { ...awarded };
+      fresh.forEach((k) => { nextAwarded[k] = 1; });
+      // the first run only records bills that were already paid, so old bills never count as new
+      return { ...prev, baselineDone: true, bonusAwarded: nextAwarded, bonusRounds: (prev.bonusRounds || 0) + (prev.baselineDone ? fresh.length : 0) };
+    });
+  }, [kDataReady, kPaidSig]);
+
   return (
     <>
       <script src="https://cdn.tailwindcss.com"></script>
@@ -1596,6 +1916,7 @@ export default function App() {
         backgroundImage: 'radial-gradient(var(--px-sun) 1.5px, transparent 1.5px)',
         backgroundSize: '24px 24px'
       }}>
+        {isShopOpen && <StarShop star={kStar} setStar={setKStar} now={kNow} onClose={() => setIsShopOpen(false)} />}
         {/* SIDEBAR */}
         <div className="px-sidebar" style={{
           width: isSidebarOpen ? '260px' : '80px',
@@ -1851,7 +2172,7 @@ export default function App() {
                   })()}
                 </div>
 
-                <ClawMachine />
+                <ClawMachine star={kStar} setStar={setKStar} starLoaded={kStarLoaded} roundsLeft={kRoundsLeft} />
               </div>
             </div>
           )}
@@ -1967,8 +2288,11 @@ export default function App() {
                       </div>
                     </div>
                   </div>
-                  <PixelCat
-                    monthName={months[currentMonthIndex]}
+                  <KutitapPanel
+                    now={kNow}
+                    star={kStar}
+                    setStar={setKStar}
+                    onOpenShop={() => setIsShopOpen(true)}
                     unpaid={
                       utilityItems.filter(i => !i.paid).length +
                       currentMonthSavingsItems.filter(i => !i.paid).length +
