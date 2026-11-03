@@ -354,38 +354,133 @@ button[style*="var(--px-mint)"]::before { content: '★ '; color: #f5a400; text-
 .claw-slot { min-width: 0; overflow: hidden; }
 .claw-slot img { width: 86%; height: 86%; object-fit: contain; }
 
-/* ---------- Star Snack Shop ---------- */
-.shop-overlay { position: fixed; inset: 0; z-index: 3000; display: grid; place-items: center; padding: 16px;
-  background-color: rgba(74,29,54,0.66); background-image: conic-gradient(rgba(0,0,0,0.14) 25%, transparent 0 50%, rgba(0,0,0,0.14) 0 75%, transparent 0); background-size: 8px 8px; }
-.shop-window { position: relative; width: min(960px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; background: #ffefd6;
-  box-shadow: -4px 0 0 0 var(--ink), 4px 0 0 0 var(--ink), 0 -4px 0 0 var(--ink), 0 4px 0 0 var(--ink), 8px 10px 0 0 var(--px-shade); animation: px-pop 0.3s steps(5); }
-.shop-awn { display: flex; height: 56px; position: sticky; top: 0; z-index: 4; }
-.shop-awn i { flex: 1; height: 56px; position: relative; box-shadow: 0 0 0 3px var(--ink); }
-.shop-awn i::after { content: ''; position: absolute; left: 0; right: 0; bottom: -16px; height: 16px; background: inherit; clip-path: polygon(0 0, 100% 0, 100% 40%, 78% 100%, 22% 100%, 0 40%); filter: drop-shadow(0 3px 0 var(--ink)); }
-.px-root .shop-sign { position: absolute; left: 50%; top: 24px; transform: translateX(-50%); z-index: 6; background: var(--px-card); padding: 8px 18px; font-family: 'Press Start 2P', monospace; font-size: 12px; color: var(--px-accent); text-shadow: 2px 2px 0 var(--px-sun); box-shadow: 0 0 0 4px var(--ink), 0 8px 0 4px var(--px-shade); white-space: nowrap; }
-.shop-close { position: absolute; right: 14px; top: 10px; z-index: 7; }
-.shop-scene { position: relative; height: 250px; margin-top: 18px; background: repeating-linear-gradient(90deg, #ffe9c9 0 48px, #ffefd6 48px 96px); border-bottom: 6px solid #c98b5a; box-shadow: 0 4px 0 var(--ink); }
-.shop-door { position: absolute; left: 24px; bottom: 6px; width: 90px; height: auto; }
-.shop-plant-a { position: absolute; left: 160px; bottom: 6px; width: 42px; height: auto; }
-.shop-plant-b { position: absolute; right: 30px; bottom: 6px; width: 45px; height: auto; }
-.shop-counter { position: absolute; left: 50%; bottom: 0; width: 96px; height: auto; margin-left: -48px; z-index: 3; }
-.shop-bunny { position: absolute; left: 50%; bottom: 98px; width: 84px; height: 108px; margin-left: -42px; z-index: 2; background-size: 420px 108px; background-repeat: no-repeat; animation: shop-idle 1s steps(5) infinite; }
-@keyframes shop-idle { from { background-position-x: 0; } to { background-position-x: -420px; } }
-.shop-say { position: absolute; left: calc(50% + 70px); top: 22px; margin: 0 !important; width: 250px; text-align: left; font-size: 12px; z-index: 5; }
-.shop-wallet { position: absolute; left: 16px; top: 16px; display: inline-flex; align-items: center; gap: 6px; background: #fff; border: 3px solid var(--ink); padding: 3px 10px 3px 6px; font-weight: 800; font-size: 16px; z-index: 5; }
-.shop-wallet i { font-style: normal; font-size: 11px; color: var(--px-muted); }
-.shop-tabs { display: flex; flex-wrap: wrap; gap: 10px 8px; padding: 18px 20px 10px; }
-.shop-shelves { display: grid; grid-template-columns: repeat(4, 1fr); gap: 26px 16px; padding: 14px 24px 18px; background: repeating-linear-gradient(90deg, #ffe9c9 0 48px, #ffefd6 48px 96px); }
-.shop-slot { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; }
-.shop-item { position: relative; height: 72px; display: grid; place-items: center; }
-.shop-item img { width: 62px; height: 62px; object-fit: contain; }
-.shop-item.bought { animation: px-pop 0.5s steps(4); }
-.shop-owned { position: absolute; right: -8px; bottom: -2px; font-size: 10px; background: var(--px-pink); color: #fff; padding: 0 4px; box-shadow: 0 0 0 2px var(--ink); }
-.shop-plank { width: 100%; height: 14px; margin-top: -6px; background: #c98b5a; box-shadow: 0 0 0 3px var(--ink), inset 0 3px 0 rgba(255,255,255,0.3); }
-.shop-price { display: inline-flex; align-items: center; gap: 4px; margin-top: 6px; background: #fff; box-shadow: 0 0 0 3px var(--ink); padding: 1px 8px 1px 4px; font-weight: 800; font-size: 13px; color: var(--px-accent); }
-.shop-name { font-size: 12px; font-weight: 800; line-height: 1.2; min-height: 2.4em; display: grid; place-items: center; }
-.shop-tag { position: absolute; top: -8px; left: calc(50% + 14px); z-index: 3; font-size: 10px; font-weight: 800; padding: 2px 6px; box-shadow: 0 0 0 2px var(--ink); transform: rotate(6deg); animation: px-pop 0.5s steps(4); }
-.shop-tag.yum { background: var(--px-mint); color: var(--px-green-d); } .shop-tag.yuck { background: #ffb3b3; color: #a02020; }
-.shop-tag.meh { background: #e8e0d0; color: var(--px-muted); } .shop-tag.rare { background: #ffd84a; color: #7a4b00; left: auto; right: calc(50% + 14px); transform: rotate(-6deg); }
-.shop-credits { padding: 10px 20px 14px; font-size: 10px; font-weight: 700; color: var(--px-muted); text-align: center; background: #ffe9c9; }
-@media (max-width: 760px) { .shop-shelves { grid-template-columns: repeat(2, 1fr); } .shop-say { position: static; margin: 0 !important; width: auto; } .shop-scene { height: 300px; } }
+/* ===================================================================== */
+/* Fonts from the Sprout Lands UI pack (pixel fonts) */
+@font-face { font-family: 'SproutPx'; src: url('./assets/fonts/sprout-3.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'SproutPx Big'; src: url('./assets/fonts/sprout-7.ttf') format('truetype'); font-display: swap; }
+
+/* ---------- Global top bar (every tab) ---------- */
+.gt-wrap { position: sticky; top: -24px; z-index: 40; margin: -24px -32px 18px; padding: 24px 32px 8px; background: var(--px-paper); }
+.gt-bar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; background: var(--px-card); border: 4px solid var(--ink); padding: 8px 64px 8px 14px; box-shadow: 0 5px 0 0 var(--px-shade); }
+.gt-brand { font-family: 'Press Start 2P', monospace; font-size: 11px; color: var(--px-accent); }
+.gt-weather { display: inline-flex; align-items: center; gap: 4px; font-family: 'SproutPx', 'Pixelify Sans', monospace; font-size: 14px; color: var(--px-muted); }
+.gt-weather em { font-style: normal; font-weight: 800; }
+.wx-icon { background-repeat: no-repeat; flex-shrink: 0; }
+.gt-chips { margin-left: auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.gt-chip { display: inline-flex; align-items: center; gap: 6px; background: #fff; border: 3px solid var(--ink); padding: 3px 10px 3px 6px; font-weight: 800; color: var(--ink); }
+.gt-chip b { font-size: 17px; line-height: 1; }
+.gt-chip small { font-size: 10px; font-weight: 700; color: var(--px-muted); letter-spacing: 0.3px; }
+.gt-chip .gt-bonus { color: var(--px-green-d); }
+.gt-rounds { padding-left: 10px; }
+.px-root .gt-shop { background: var(--px-pink); color: #fff; font-family: 'Press Start 2P', monospace; font-size: 11px; padding: 11px 16px; text-shadow: 2px 2px 0 var(--ink);
+  box-shadow: inset 0 3px 0 rgba(255,255,255,0.45), inset 0 -3px 0 rgba(74,29,54,0.2), -3px 0 0 0 var(--ink), 3px 0 0 0 var(--ink), 0 -3px 0 0 var(--ink), 0 3px 0 0 var(--ink), 0 7px 0 0 var(--ink); transition: transform 0.08s steps(2); }
+.px-root .gt-shop:hover { transform: translateY(-3px); filter: brightness(1.07); }
+.px-root .gt-shop:active { transform: translateY(4px); }
+.px-root .gt-shop.open { background: var(--px-sun); color: var(--ink); text-shadow: none; }
+/* the sound toggle lives in the top bar now */
+.px-sfx { top: 34px !important; bottom: auto !important; right: 44px !important; width: 36px; height: 36px; z-index: 9998; }
+
+/* ---------- Rain (Kutitap's meadow + shop window) ---------- */
+.rain-fx { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 3; }
+.rain-fx i { position: absolute; top: -12px; width: 3px; height: 10px; background: #e2f3ff; box-shadow: 0 0 0 1px rgba(74, 29, 54, 0.25); animation: rain-fall 0.7s steps(10) infinite; }
+@keyframes rain-fall { from { transform: translateY(0); } to { transform: translateY(210px); } }
+.tod-morning.rainy, .tod-day.rainy, .tod-sunset.rainy { background: linear-gradient(#9aa8bd 0 62%, #5f9360 62% 66%, #74a96e 66% 100%); }
+.tod-night.rainy { background: linear-gradient(#232744 0 62%, #2b5f48 62% 66%, #357452 66% 100%); }
+.raincloud { filter: brightness(0.62) saturate(0.35); }
+
+/* ---------- Star Snack Shop room ---------- */
+.ss-root { width: 100%; }
+.ss-music { position: fixed; left: -20px; bottom: 0; width: 2px; height: 2px; border: 0; opacity: 0.01; pointer-events: none; }
+.ss-fit { position: relative; width: 100%; max-width: 1400px; margin: 0 auto; }
+.ss-scene { position: absolute; left: 0; top: 0; transform-origin: top left; overflow: hidden; box-shadow: 0 0 0 4px var(--ink); font-family: 'SproutPx', 'Pixelify Sans', monospace; color: var(--ink); image-rendering: pixelated; }
+.ss-scene button { padding: 0; margin: 0; background: none; border: 0; cursor: pointer; font: inherit; color: inherit; }
+.ss-scene img, .ss-scene .px-sprite { image-rendering: pixelated; }
+.ss-scene > * { position: absolute; }
+.ss-wall { inset: 0 0 350px 0; background: url('./assets/shop2/brick.png') 0 0 / 192px 144px, #b8583c; box-shadow: inset 0 -16px 0 rgba(74, 29, 54, 0.25); }
+.ss-beam { left: 0; right: 0; top: 0; height: 36px; background: linear-gradient(#6b3a26 0 80%, #4d2818 80%); border-bottom: 4px solid var(--ink); z-index: 2; }
+.ss-sign { position: absolute; left: 50%; top: 4px; transform: translateX(-50%); background: var(--px-card); padding: 6px 16px; font-family: 'Press Start 2P', monospace; font-size: 11px; color: var(--px-accent); text-shadow: 2px 2px 0 var(--px-sun); box-shadow: 0 0 0 3px var(--ink); white-space: nowrap; }
+.ss-leave { right: 10px; top: 4px; width: 30px; height: 28px; z-index: 6; background: var(--px-sun) !important; color: var(--ink); font-weight: 800; box-shadow: 0 0 0 3px var(--ink) !important; }
+.ss-floor { left: 0; right: 0; top: 350px; bottom: 0; background: url('./assets/shop2/floor.png') center / cover; border-top: 6px solid #8a5233; box-shadow: inset 0 18px 18px -8px rgba(74, 29, 54, 0.35); }
+
+/* wall furniture */
+.ss-clock { left: 50px; top: 62px; } .ss-clock img { width: 64px; height: auto; }
+.ss-door { left: 14px; top: 140px; width: 120px; height: auto; z-index: 1; }
+.ss-obj { z-index: 5; }
+.ss-obj:hover > img, .ss-obj:hover > span { animation: px-bob 0.5s steps(2) infinite; }
+
+/* window: the sky is BEHIND the picture, so weather stays outside the curtains and frame */
+.ss-window { left: 150px; top: 70px; width: 240px; height: 177px; z-index: 3; }
+.ss-outside { position: absolute; left: 44px; top: 36px; width: 156px; height: 132px; overflow: hidden; z-index: 1; display: block; }
+.ss-window-img { position: absolute; left: 0; top: 0; width: 240px; height: 177px; z-index: 2; pointer-events: none; }
+.ss-outside .ss-sky { position: absolute; }
+.ss-outside .ss-raincloud { filter: brightness(0.62) saturate(0.35); }
+.ss-hill { position: absolute; left: -20px; right: -20px; bottom: 0; height: 46px; background: radial-gradient(ellipse at 40% 100%, #6fbf5e 0 55%, transparent 56%), radial-gradient(ellipse at 90% 100%, #86d070 0 40%, transparent 41%); opacity: 0.9; }
+.tod-night .ss-hill { filter: brightness(0.5) saturate(0.8); }
+.ss-outside.rainy .ss-hill { filter: saturate(0.5) brightness(0.8); }
+
+/* lamp on its nightstand; the light is only on at night */
+.ss-lamp { left: 398px; top: 192px; } .ss-lamp img { width: 96px; height: auto; display: block; }
+.ss-lampglow { left: 298px; top: 120px; width: 300px; height: 300px; border-radius: 50%; background: radial-gradient(circle, rgba(255, 236, 160, 0.95) 0 12%, rgba(255, 220, 130, 0.45) 30%, transparent 68%); opacity: 0; z-index: 31; mix-blend-mode: screen; pointer-events: none; transition: opacity 0.6s; }
+.tod-room-night .ss-lampglow { opacity: 1; }
+.tod-room-night .ss-lamp img { filter: brightness(1.25) drop-shadow(0 0 10px rgba(255, 226, 140, 0.9)); }
+
+/* food cabinets: 3 foods per category inside the shelves */
+.ss-cabinet { top: 62px; width: 240px; height: 274px; z-index: 2; }
+.ss-cabinet.c0 { left: 500px; } .ss-cabinet.c1 { left: 745px; }
+.ss-cabinet-img { position: absolute; inset: 0; width: 100%; height: 100%; }
+.ss-shelf { position: absolute; left: 20px; width: 200px; height: 42px; display: flex; align-items: flex-end; justify-content: space-around; }
+.ss-shelf.r0 { top: 51px; } .ss-shelf.r1 { top: 106px; } .ss-shelf.r2 { top: 164px; }
+.ss-group { position: relative; display: flex; align-items: flex-end; padding: 2px 3px; }
+.ss-group img.px-sprite:not(.ss-sel) { width: 21px; height: 21px; object-fit: contain; margin: 0 -1px; filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.4)); }
+.ss-shelf.n2 .ss-group img.px-sprite:not(.ss-sel) { width: 27px; height: 27px; }
+.ss-group:hover { transform: translateY(-2px); filter: brightness(1.12); }
+.ss-group::after { content: attr(data-name); position: absolute; left: 50%; bottom: calc(100% + 2px); transform: translateX(-50%); background: #fff; box-shadow: 0 0 0 2px var(--ink); padding: 0 4px; font-size: 10px; font-weight: 700; white-space: nowrap; opacity: 0; pointer-events: none; z-index: 9; }
+.ss-group:hover::after { opacity: 1; }
+.ss-sel { position: absolute; width: 11px; height: 11px; z-index: 3; }
+.ss-sel.c0 { left: -3px; top: -3px; } .ss-sel.c1 { right: -3px; top: -3px; } .ss-sel.c2 { left: -3px; bottom: -3px; } .ss-sel.c3 { right: -3px; bottom: -3px; }
+
+/* bunny behind the table */
+.ss-bunny { left: 520px; top: 294px; z-index: 4; width: 70px; height: 90px; }
+.ss-bunny-anim { display: block; width: 70px; height: 90px; background-size: 350px 360px; background-repeat: no-repeat; animation: shop-idle 1s steps(5) infinite; }
+.ss-bunny.walking .ss-bunny-anim { animation: shop-idle 0.45s steps(5) infinite, ss-hop 0.3s steps(2) infinite; }
+@keyframes ss-hop { 50% { transform: translateY(-4px); } }
+@keyframes shop-idle { from { background-position-x: 0; } to { background-position-x: -350px; } }
+
+/* table = what you buy */
+.ss-table { left: 230px; top: 372px; width: 500px; height: 214px; z-index: 6; }
+.ss-table-img { position: absolute; inset: 0; width: 100%; height: 100%; }
+.ss-tname { position: absolute; left: 6px; top: -14px; z-index: 2; background: #fff; box-shadow: 0 0 0 3px var(--ink); padding: 1px 8px; font-size: 11px; font-weight: 700; }
+.ss-top { position: absolute; left: 34px; right: 34px; top: 10px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px 4px; }
+.ss-slot { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.ss-item { position: relative; display: grid; place-items: center; width: 36px; height: 34px; }
+.ss-item img { width: 36px; height: 34px; object-fit: contain; filter: drop-shadow(0 2px 0 rgba(74, 29, 54, 0.35)); }
+.ss-item.bought { animation: px-pop 0.5s steps(4); }
+.ss-owned { position: absolute; right: -8px; bottom: -2px; font-size: 10px; background: var(--px-pink); color: #fff; padding: 0 4px; box-shadow: 0 0 0 2px var(--ink); }
+.ss-price { display: inline-flex; align-items: center; gap: 3px; background: #fff; box-shadow: 0 0 0 2px var(--ink); padding: 0 5px 0 3px; font-size: 11px; font-weight: 700; line-height: 14px; }
+.ss-buy { background: var(--px-sun) !important; box-shadow: 0 0 0 2px var(--ink), 0 3px 0 2px var(--ink) !important; padding: 0 12px !important; font-size: 11px !important; font-weight: 800 !important; line-height: 15px; margin-top: 1px !important; }
+.ss-buy.poor { background: #e5d9c8 !important; color: #8a7a6a; }
+.ss-buy:hover { filter: brightness(1.08); transform: translateY(-1px); }
+.ss-buy:active { transform: translateY(2px); }
+.ss-tag { position: absolute; top: -4px; left: calc(50% + 4px); z-index: 3; display: inline-flex; align-items: center; gap: 2px; font-size: 9px; font-weight: 800; padding: 0 4px; box-shadow: 0 0 0 2px var(--ink); transform: rotate(5deg); animation: px-pop 0.5s steps(4); white-space: nowrap; }
+.ss-tag img { width: 8px; height: auto; }
+.ss-tag.yum { background: var(--px-mint); color: var(--px-green-d); } .ss-tag.yuck { background: #ffb3b3; color: #a02020; }
+.ss-tag.rare { background: #ffd84a; color: #7a4b00; left: auto; right: calc(50% + 6px); transform: rotate(-5deg); }
+
+/* dialogue box, Stardew style: big and wide, name tab, bunny portrait */
+.ss-bubble { left: 40px; bottom: 8px; width: 920px; height: 122px; padding: 22px 250px 22px 44px; z-index: 40; isolation: isolate; display: flex; align-items: center; font-family: 'SproutPx Big', 'Pixelify Sans', monospace; font-size: 26px; line-height: 1.25; letter-spacing: 0.3px; }
+.ss-bubble::before, .ss-name::before { content: ''; position: absolute; inset: 0; z-index: -1; border-style: solid; border-width: 30px; border-image: var(--dlg) 16 fill / 30px / 0 stretch; image-rendering: pixelated; filter: drop-shadow(3px 0 0 #7a4a2a) drop-shadow(-3px 0 0 #7a4a2a) drop-shadow(0 3px 0 #7a4a2a) drop-shadow(0 -3px 0 #7a4a2a); }
+.ss-bubble-text { display: block; }
+.ss-name { left: 78px; bottom: 100px; z-index: 41; isolation: isolate; padding: 8px 34px 10px; font-family: 'SproutPx Big', 'Pixelify Sans', monospace; font-size: 26px; line-height: 1; }
+.ss-name::before { border-width: 18px; border-image-width: 18px; }
+.ss-portrait { right: 62px; bottom: 34px; width: 112px; height: 144px; background-size: 560px 576px; background-repeat: no-repeat; z-index: 42; image-rendering: pixelated; filter: drop-shadow(0 4px 0 rgba(74, 29, 54, 0.35)); }
+.ss-ok { position: absolute !important; right: 190px; bottom: 26px; display: inline-flex; align-items: center; gap: 8px; background: transparent !important; font-family: 'SproutPx Big', monospace; font-size: 22px !important; font-weight: 800 !important; padding: 0 !important; }
+.ss-ok i { width: 0; height: 0; border-left: 9px solid transparent; border-right: 9px solid transparent; border-top: 12px solid var(--ink); animation: ss-arrow 0.8s steps(2) infinite; }
+.ss-ok:hover { filter: brightness(1.3); }
+@keyframes ss-arrow { 50% { transform: translateY(4px); } }
+
+/* the room's light follows the sky */
+.ss-light { inset: 0; z-index: 30; pointer-events: none; mix-blend-mode: multiply; }
+.ss-light.morning { background: rgba(255, 214, 170, 0.3); }
+.ss-light.sunset { background: rgba(255, 170, 120, 0.38); }
+.ss-light.night { background: rgba(84, 88, 168, 0.5); }
+@media (prefers-reduced-motion: reduce) { .rain-fx i, .ss-scene * { animation: none !important; } }

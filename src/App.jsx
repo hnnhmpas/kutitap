@@ -78,11 +78,10 @@ import spSun from './assets/shop/sun.png';
 import spMoon from './assets/shop/moon.png';
 import spTwinkle from './assets/shop/twinkle.png';
 import spCloud from './assets/shop/cloud.png';
-import shBunny from './assets/shop/bunny-idle.png';
-import shCounter from './assets/shop/counter-cab.png';
-import shDoor from './assets/shop/door-red.png';
-import shPlantA from './assets/shop/plant-a.png';
-import shPlantB from './assets/shop/plant-b.png';
+import StarShop from './StarShop';
+import GlobalTopBar from './GlobalTopBar';
+import { isRainyDay, RainDrops } from './kutitapWeather';
+import { SFX_WAV } from './kutitapShopAssets';
 
 const NAV_SPRITES = {
   dashboard: spTama,
@@ -301,11 +300,23 @@ function PixelFX() {
       munch: [[330, 0.05], [262, 0.05], [330, 0.05], [262, 0.05]], angry: [[196, 0.1], [185, 0.1], [175, 0.1], [147, 0.25]],
       sing: [[523, 0.12], [659, 0.12], [784, 0.12], [1047, 0.2], [880, 0.12], [784, 0.12], [659, 0.12], [784, 0.2], [1047, 0.12], [1175, 0.12], [1319, 0.12], [1568, 0.34]]
     };
+    // real sound files (Sprout Sorry pack) for the game events; the synth blips stay as the fallback
+    const playWav = (type) => {
+      const list = SFX_WAV[type];
+      if (!list || mutedRef.current) return false;
+      try {
+        const a = new Audio(list[Math.floor(Math.random() * list.length)]);
+        a.volume = 0.55;
+        const pr = a.play();
+        if (pr && pr.catch) pr.catch(() => {});
+        return true;
+      } catch (e) { return false; }
+    };
     const onSfx = (e) => {
       const d = e.detail || {};
       const cx = d.x !== undefined ? d.x : window.innerWidth / 2;
       const cy = d.y !== undefined ? d.y : window.innerHeight / 2;
-      if (SONGS[d.type]) tone(SONGS[d.type], d.type === 'angry' ? 0.05 : 0.035);
+      if (!playWav(d.type) && SONGS[d.type]) tone(SONGS[d.type], d.type === 'angry' ? 0.05 : 0.035);
       if (d.type === 'win' || d.type === 'cat' || d.type === 'sing') burst(cx, cy, 16, ['#ffd86b', '#f0589a', '#9be58a', '#fff3d4']);
       if (d.type === 'rare') burst(cx, cy, 24, ['#ffd84a', '#fff3d4', '#f0589a']);
       if (d.type === 'angry') burst(cx, cy, 8, ['#e23c3c', '#4a1d36']);
@@ -332,6 +343,7 @@ function PixelFX() {
         const next = !muted;
         setMuted(next);
         try { window.localStorage.setItem('kutitap_sfx', next ? 'off' : 'on'); } catch (e) {}
+        window.dispatchEvent(new CustomEvent('kutitap-sfx-mute', { detail: { muted: next } }));
       }}
     >
       {muted ? <VolumeX size={20} /> : <Volume2 size={20} />}
@@ -420,6 +432,7 @@ function KutitapPanel({ unpaid, total, now, star, setStar, onOpenShop }) {
   const pct = total > 0 ? Math.round((paid / total) * 100) : 0;
   const mood = total === 0 ? 'sleep' : allPaid ? 'happy' : paid > 0 ? 'ok' : 'sad';
   const tod = todOf(now);
+  const rain = isRainyDay(now);
   const monthKey = tasteMonthKey(now);
   const monthName = now.toLocaleString('en-US', { month: 'long' });
 
@@ -481,15 +494,22 @@ function KutitapPanel({ unpaid, total, now, star, setStar, onOpenShop }) {
     <div style={{ background: 'var(--px-card)', borderRadius: 0, '--px': 'panel', padding: '16px', textAlign: 'center', width: '100%', flexShrink: 0, boxShadow: '0 8px 25px rgba(223,177,91,0.15)' }}>
       <div className="kt-title">
         <Sprite src={spHeart} className="px-heart-icon" /> <span>Kutitap · Your Kash Kasama</span>
-        <span className="kt-wallet"><StarCoin size={18} />{(star.coins || 0).toLocaleString()}</span>
       </div>
 
-      <div className={`px-meadow tod-${tod} px-meadow-${reaction && reaction.taste === 'hate' ? 'sad' : mood}`}>
-        {tod === 'night' && stars.map(([l, t, d, w]) => <img key={l} className="px-sprite kt-star" src={spTwinkle} alt="" style={{ left: `${l}%`, top: t, animationDelay: `${d}s`, width: w }} />)}
-        {tod === 'night' && <img className="px-sprite kt-sky-obj" src={spMoon} alt="" style={{ left: 16, top: 10, width: 30 }} />}
-        {(tod === 'morning' || tod === 'day') && <img className="px-sprite kt-sky-obj" src={spSun} alt="" style={tod === 'morning' ? { left: 12, bottom: 70, width: 34 } : { left: 16, top: 10, width: 30 }} />}
-        {tod === 'sunset' && <img className="px-sprite kt-sky-obj" src={spSun} alt="" style={{ left: '16%', bottom: 60, width: 40 }} />}
-        {tod !== 'night' && <img className="px-sprite kt-sky-obj" src={spCloud} alt="" style={{ left: '44%', top: 12, width: 44, opacity: 0.9 }} />}
+      <div className={`px-meadow tod-${tod}${rain ? ' rainy' : ''} px-meadow-${reaction && reaction.taste === 'hate' ? 'sad' : mood}`}>
+        {!rain && tod === 'night' && stars.map(([l, t, d, w]) => <img key={l} className="px-sprite kt-star" src={spTwinkle} alt="" style={{ left: `${l}%`, top: t, animationDelay: `${d}s`, width: w }} />)}
+        {!rain && tod === 'night' && <img className="px-sprite kt-sky-obj" src={spMoon} alt="" style={{ left: 16, top: 10, width: 30 }} />}
+        {!rain && (tod === 'morning' || tod === 'day') && <img className="px-sprite kt-sky-obj" src={spSun} alt="" style={tod === 'morning' ? { left: 12, bottom: 70, width: 34 } : { left: 16, top: 10, width: 30 }} />}
+        {!rain && tod === 'sunset' && <img className="px-sprite kt-sky-obj" src={spSun} alt="" style={{ left: '16%', bottom: 60, width: 40 }} />}
+        {!rain && tod !== 'night' && <img className="px-sprite kt-sky-obj" src={spCloud} alt="" style={{ left: '44%', top: 12, width: 44, opacity: 0.9 }} />}
+        {rain && (
+          <>
+            <img className="px-sprite kt-sky-obj raincloud" src={spCloud} alt="" style={{ left: '10%', top: 8, width: 56 }} />
+            <img className="px-sprite kt-sky-obj raincloud" src={spCloud} alt="" style={{ left: '46%', top: 18, width: 50 }} />
+            <img className="px-sprite kt-sky-obj raincloud" src={spCloud} alt="" style={{ left: '72%', top: 6, width: 58 }} />
+            <RainDrops count={26} />
+          </>
+        )}
         <img className="px-sprite px-scene px-scene-tree" src={scTree} alt="" />
         <img className="px-sprite px-scene px-scene-bush" src={scBush} alt="" />
         <img className="px-sprite px-scene px-scene-fy" src={scFlowerY} alt="" />
@@ -566,102 +586,6 @@ function KutitapPanel({ unpaid, total, now, star, setStar, onOpenShop }) {
             <button onClick={() => feed(id)} disabled={!!reaction} style={{ backgroundColor: 'var(--px-pink)', color: '#FFFFFF', borderRadius: 0, '--px': 'pill', padding: '5px 10px', fontWeight: 800, fontSize: '11px', opacity: reaction ? 0.5 : 1 }}>Feed</button>
           </div>
         ))}
-      </div>
-      <button onClick={onOpenShop} style={{ backgroundColor: 'var(--px-sun)', color: 'var(--ink)', borderRadius: 0, '--px': 'pill', padding: '10px 16px', fontWeight: 800, fontSize: '13px', marginTop: '14px', width: '100%' }}>
-        ★ Visit the Star Snack Shop
-      </button>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Star Snack Shop: buy foods with Star Coins (run by the bunny)
-// ---------------------------------------------------------------------------
-function StarShop({ star, setStar, now, onClose }) {
-  const [tab, setTab] = useState(FOOD_SETS[0].id);
-  const [say, setSay] = useState('');
-  const [justBought, setJustBought] = useState(null);
-  const monthKey = tasteMonthKey(now);
-  const hint = cravingHint(monthKey);
-  const tried = (star.tried || {})[monthKey] || {};
-  const coins = star.coins || 0;
-  const set = FOOD_SETS.find((s) => s.id === tab) || FOOD_SETS[0];
-  const talk = say || `Welcome! Kutitap is craving something from the ${hint.craving.join(', ')} this month...`;
-
-  useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
-  const buy = (food) => {
-    if (coins < food.price) {
-      setSay('Not enough Star Coins! Try the claw machine on the Dashboard.');
-      sfx('miss');
-      return;
-    }
-    setStar((prev) => {
-      const c = prev.coins || 0;
-      if (c < food.price) return prev;
-      return { ...prev, coins: c - food.price, pantry: { ...(prev.pantry || {}), [food.id]: ((prev.pantry || {})[food.id] || 0) + 1 } };
-    });
-    setSay(`Thank you! One ${food.name} for Kutitap. Maybe it will love it!`);
-    setJustBought(food.id);
-    setTimeout(() => setJustBought(null), 700);
-    sfx('buy');
-  };
-
-  return (
-    <div className="shop-overlay" onClick={onClose}>
-      <div className="shop-window" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Star Snack Shop">
-        <div className="shop-awn">{Array.from({ length: 16 }).map((_, i) => <i key={i} style={{ background: i % 2 === 0 ? 'var(--px-pink)' : '#fff3d4' }} />)}</div>
-        <div className="shop-sign">★ STAR SNACK SHOP ★</div>
-        <button onClick={onClose} aria-label="Close shop" className="shop-close" style={{ backgroundColor: 'var(--px-sun)', color: 'var(--ink)', borderRadius: 0, '--px': 'pill', width: '36px', height: '36px', fontWeight: 800 }}>X</button>
-
-        <div className="shop-scene">
-          <img className="px-sprite shop-door" src={shDoor} alt="" />
-          <img className="px-sprite shop-plant-a" src={shPlantA} alt="" />
-          <img className="px-sprite shop-plant-b" src={shPlantB} alt="" />
-          <div className="px-sprite shop-bunny" role="img" aria-label="Shopkeeper bunny" style={{ backgroundImage: `url(${shBunny})` }} />
-          <img className="px-sprite shop-counter" src={shCounter} alt="" />
-          <div className="px-cat-bubble shop-say" aria-live="polite">{talk}</div>
-          <div className="shop-wallet"><StarCoin size={24} /> {coins.toLocaleString()} <i>Star Coins</i></div>
-        </div>
-
-        <div className="shop-tabs" role="tablist">
-          {FOOD_SETS.map((s) => (
-            <button key={s.id} role="tab" aria-selected={s.id === tab} onClick={() => setTab(s.id)}
-              style={{ backgroundColor: s.id === tab ? 'var(--px-pink)' : '#FFFFFF', color: s.id === tab ? '#FFFFFF' : 'var(--ink)', borderRadius: 0, '--px': 'pill', padding: '6px 10px', fontWeight: 800, fontSize: '11px' }}>
-              {s.name}
-            </button>
-          ))}
-        </div>
-
-        <div className="shop-shelves">
-          {set.foods.map((food) => {
-            const t = tried[food.id];
-            const owned = (star.pantry || {})[food.id] || 0;
-            return (
-              <div key={food.id} className="shop-slot">
-                {t === 'love' && <span className="shop-tag yum">YUMMY!</span>}
-                {t === 'hate' && <span className="shop-tag yuck">YUCKY!</span>}
-                {t === 'ok' && <span className="shop-tag meh">okay</span>}
-                {food.rare && <span className="shop-tag rare">RARE</span>}
-                <div className={`shop-item${food.rare ? ' rare-glow' : ''}${justBought === food.id ? ' bought' : ''}`}>
-                  <img className="px-sprite" src={food.src} alt={food.name} />
-                  {owned > 0 && <b className="shop-owned">x{owned}</b>}
-                </div>
-                <div className="shop-plank" />
-                <span className="shop-price"><StarCoin size={16} />{food.price}</span>
-                <span className="shop-name">{food.name}</span>
-                <button onClick={() => buy(food)} style={{ backgroundColor: coins >= food.price ? 'var(--px-sun)' : '#E5D9C8', color: 'var(--ink)', borderRadius: 0, '--px': 'pill', padding: '5px 14px', fontWeight: 800, fontSize: '11px' }}>Buy</button>
-              </div>
-            );
-          })}
-        </div>
-        <div className="shop-credits">
-          Shopkeeper bunny: Little Dreamyland by Starmixu &amp; Utaskuas · Shop furniture: Cafe tiles pack · Scenery: Sprout Lands by Cup Nooble
-        </div>
       </div>
     </div>
   );
@@ -933,7 +857,6 @@ function ClawMachine({ star, setStar, starLoaded, roundsLeft }) {
     >
       <div className="claw-marquee">
         <span className="claw-title">Claw Catch</span>
-        <span className="kt-wallet"><StarCoin size={18} />{(star.coins || 0).toLocaleString()}</span>
         <span className="claw-lives" aria-label={`${tries} tries left`}>
           {Array.from({ length: TRIES_PER_ROUND }).map((_, i) => (
             <img key={i} src={spHeart} alt="" className={`px-sprite claw-heart${i < tries ? '' : ' off'}`} />
@@ -1866,9 +1789,13 @@ export default function App() {
   const [kStar, setKStar, kStarLoaded] = useFirebaseSync('kutitap_star', STAR_DEFAULT);
   const [isShopOpen, setIsShopOpen] = useState(false);
   const kNow = useNow(60000);
+  const kTod = todOf(kNow);
+  const kRain = isRainyDay(kNow);
   const kToday = localDay(kNow);
   const kDataReady = useDataReady(['kutitap_star', 'kutitap_utilities', 'kutitap_savings', 'kutitap_expenses', 'kutitap_loans']);
   const kRoundsLeft = Math.max(0, DAILY_ROUNDS - (kStar.day === kToday ? kStar.roundsUsed || 0 : 0)) + (kStar.bonusRounds || 0);
+  // the shop is a room under the top bar; leaving it when you switch tabs
+  useEffect(() => { setIsShopOpen(false); }, [activeTab]);
 
   // every bill that is marked Paid (once per bill per month) earns one bonus round
   const kPaidKeys = [];
@@ -1916,7 +1843,6 @@ export default function App() {
         backgroundImage: 'radial-gradient(var(--px-sun) 1.5px, transparent 1.5px)',
         backgroundSize: '24px 24px'
       }}>
-        {isShopOpen && <StarShop star={kStar} setStar={setKStar} now={kNow} onClose={() => setIsShopOpen(false)} />}
         {/* SIDEBAR */}
         <div className="px-sidebar" style={{
           width: isSidebarOpen ? '260px' : '80px',
@@ -1970,7 +1896,7 @@ export default function App() {
                   <button
                     key={item.id}
                     className={`px-nav${isActive ? ' px-nav-active' : ''}`}
-                    onClick={() => setActiveTab(item.id)}
+                    onClick={() => { setActiveTab(item.id); setIsShopOpen(false); }}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -2039,6 +1965,24 @@ export default function App() {
         {/* MAIN AREA */}
         <div className="px-main" style={{ flex: 1, height: '100vh', padding: '24px 32px', boxSizing: 'border-box', overflowY: 'auto', display: 'flex', flexDirection: 'column', width: '100%' }}>
 
+          <GlobalTopBar
+            coins={kStar.coins || 0}
+            shopOpen={isShopOpen}
+            onToggleShop={() => setIsShopOpen((v) => !v)}
+          />
+
+          {isShopOpen ? (
+            <StarShop
+              star={kStar}
+              setStar={setKStar}
+              now={kNow}
+              tod={kTod}
+              rain={kRain}
+              game={{ tasteOf, cravingHint, tasteMonthKey, sfx }}
+              onClose={() => setIsShopOpen(false)}
+            />
+          ) : (
+          <>
           {/* DASHBOARD TAB */}
           {activeTab === 'dashboard' && (
             <div style={{ width: '100%', display: 'flex', flexDirection: 'column', minHeight: '100%', gap: '20px' }}>
@@ -3059,6 +3003,8 @@ export default function App() {
                 </table>
               </div>
             </div>
+          )}
+          </>
           )}
         </div>
       </div>
