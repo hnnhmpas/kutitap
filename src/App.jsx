@@ -80,6 +80,8 @@ import spTwinkle from './assets/shop/twinkle.png';
 import spCloud from './assets/shop/cloud.png';
 import StarShop from './StarShop';
 import shopIcon from './assets/ui/shop-icon.png';
+import calcIcon from './assets/ui/calc-icon.png';
+import Calculator from './Calculator';
 import { isRainyDay, RainDrops } from './kutitapWeather';
 import { SFX_WAV } from './kutitapShopAssets';
 
@@ -1795,6 +1797,8 @@ export default function App() {
   // ---- Kutitap game: Star Coins, pantry, rounds (all saved to Firebase) ----
   const [kStar, setKStar, kStarLoaded] = useFirebaseSync('kutitap_star', STAR_DEFAULT);
   const [isShopOpen, setIsShopOpen] = useState(false);
+  const [calcMode, setCalcMode] = useState('closed'); // closed | min | open
+  const [calcHistory, setCalcHistory] = useFirebaseSync('kutitap_calc_history', []);
   const kNow = useNow(60000);
   const kTod = todOf(kNow);
   const kRain = isRainyDay(kNow);
@@ -1847,6 +1851,10 @@ export default function App() {
       <button type="button" className={`shop-fab${isShopOpen ? ' open' : ''}`} onClick={() => setIsShopOpen((v) => !v)} aria-label="Star Snack Shop" aria-pressed={isShopOpen}>
         <img className="px-sprite" src={shopIcon} alt="" />
       </button>
+      <button type="button" className={`calc-fab${calcMode === 'open' ? ' open' : ''}`} onClick={() => setCalcMode((m) => (m === 'open' ? 'min' : 'open'))} aria-label="Catculator" title="Catculator" aria-pressed={calcMode === 'open'}>
+        <img className="px-sprite" src={calcIcon} alt="" />
+      </button>
+      <Calculator mode={calcMode} setMode={setCalcMode} history={calcHistory} setHistory={setCalcHistory} />
       <div className="px-root" style={{
         position: 'fixed',
         inset: 0,
