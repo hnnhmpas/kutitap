@@ -13,6 +13,7 @@ import spMoon from './assets/shop/moon.png';
 import spTwinkle from './assets/shop/twinkle.png';
 import spCloud from './assets/shop/cloud.png';
 import shBunny from './assets/shop/bunny-all.png';
+import shBunnyRun from './assets/shop/bunny-run.png';
 import imgDoor from './assets/shop2/door.png';
 import imgClock from './assets/shop2/clock.png';
 import imgWindow from './assets/shop2/window.png';
@@ -24,6 +25,24 @@ const SCENE_W = 1000;
 const SCENE_H = 700;
 // 14 sets spread over two cabinets, three shelves each: [3, 2, 2] sets per shelf
 const SHELF_ROWS = [[0, 1, 2], [3, 4], [5, 6], [7, 8, 9], [10, 11], [12, 13]];
+
+// What Bun Bun says when you pick a shelf
+const SET_SPEECH = {
+  'Berry Bakery': 'I picked the sweetest, juicy berries this morning and baked them into warm, cozy pies!',
+  'Veggie Patch': 'Crunchy carrots and crisp greens straight from my garden, they\u2019re so fresh and yummy!',
+  'Vending Corner': 'Clink! Pop a coin in the little machine and see what fun snack drops out for you!',
+  'Cookie Tin': 'Smell that? They\u2019re warm chocolate chip cookies fresh from the oven, ready for nibbling!',
+  'Sushi Bar': 'Little rice bites wrapped up so neat and tidy, they\u2019re almost too pretty to eat!',
+  'Ramen Shop': 'A big, warm bowl of noodle soup! It makes your tummy feel so cozy on a cool day.',
+  'Toast Cafe': 'Thick slices of warm bread with melty butter on top... simple, golden, and delicious!',
+  'Snack Shack': 'Salty, crunchy little treats that are super fun to munch on while you walk around!',
+  'Fruit Basket': 'Look at all the bright, happy colors! Every single fruit is sweet, juicy, and full of sunshine.',
+  'Dango Stand': 'Soft, chewy rice balls drizzled in sweet sauce! Three little bites on a stick!',
+  'Breakfast Table': 'A big, lovely morning plate with eggs and toast to start your whole day with a smile!',
+  'Bread Basket': 'The softest, fluffiest loaves of bread ever! They smell just like sweet warm sunshine.',
+  'Pizza and Burgers': 'Cheesy, gooey, and super savory\u2014perfect when your tummy is making big hungry rumbles!',
+  'Konbini Snacks': 'My absolute favorite late-night treats! All wrapped up and ready for a quick bedtime bite.'
+};
 
 // Bun Bun's random chatter (fun lines that match the shop theme)
 const CHATTER = [
@@ -37,7 +56,23 @@ const CHATTER = [
   'Kutitap sniffed the cookie tin earlier. Suspicious!',
   'If you listen closely, the cabinets hum a tiny snack song.',
   'I polish these shelves every day. Okay, every other day. Okay... sometimes.',
-  'Try the claw machine! Rare treats are worth 15 coins, but worth it!'
+  'Try the claw machine! Rare treats are worth 15 coins, but worth it!',
+  'Bun Bun\u2019s tummy is rumbling, but Bun Bun must NOT eat the inventory... oops, I ate it.',
+  'S-sometimes Bun Bun likes to sit in a sunbeam and count his shiny coins. One for savings, one for snacks, and one... oh, Bun Bun accidentally ate a strawberry instead of saving it!',
+  'Thank you for stopping by! Bun Bun appreciates your customer lifetime value... um, Bun Bun means, Bun Bun just really loves seeing your happy smile!',
+  'W-welcome in! The floor is super clean today because Bun Bun swept it with his own fluffy tail... wait, no, Bun Bun used a real broom, promise!',
+  'If you ever feel a little sad, Bun Bun recommends three things: a warm cup of sweet tea, a soft blanket, and a big hop hop in the sunshine!',
+  'Bun Bun\u2019s favorite trick is making a delicious treat disappear! Want to see? nom nom nom ...See? It\u2019s gone right into Bun Bun\u2019s tummy!',
+  'Bun Bun made a tiny little rule today: everyone who visits the shop gets a free mental hug! *squeezes eyes shut and sends warm hugs your way*',
+  'Wait! Don\u2019t step there! A tiny ladybug is taking an afternoon rest on that floor tile... Bun Bun put a little crumb next to her for lunch!',
+  'Bun Bun loves when you stop by! It makes Bun Bun\u2019s heart go thump-thump-thump like a tiny little drum!',
+  'Bun Bun thinks the best kind of weather is \u2018bread weather\u2019\u2014that\u2019s when it\u2019s cool outside, but warm and sweet-smelling inside the shop!',
+  'Bun Bun tried to learn how to purr like Kutitap this morning... but Bun Bun just made a little squeak-snort sound instead! *giggles and covers nose with tiny paws*',
+  'Wait, Kutitap! Don\u2019t wiggle your tail so fast, Bun Bun keeps trying to catch it! ...Oof, Bun Bun tumbled over his own floppy ears!',
+  'Why did the cat go to the bakery? To get a purr-fect slice of berry pie! Bun Bun thought of that joke just for Kutitap!',
+  'Kutitap, if you do a big stretch, Bun Bun will do a big hop hop! Ready? One, two, three... boing!',
+  'Bun Bun saved an extra soft loaf of bread today just in case Kutitap wants to practice making tiny biscuits on it!',
+  'Ooh, Kutitap\u2019s whiskers are twitching! Is Kutitap smelling the fresh cinnamon rolls, or is Kutitap just happy to see Bun Bun?'
 ];
 const timeLine = (tod, rain) => (rain
   ? 'Pitter patter! Rainy days are the best days for cozy snacks.'
@@ -47,6 +82,10 @@ const timeLine = (tod, rain) => (rain
 const HOME = { x: 555, y: 384 };
 const SPOTS = [{ x: 90, y: 420 }, { x: 110, y: 540 }, { x: 170, y: 640 }, { x: 800, y: 440 }, { x: 870, y: 520 }, { x: 790, y: 560 }, { x: 905, y: 420 }];
 const BEHIND_Y = 366;
+const BUNNY_H = 95;
+// While a speech box is open, the area under it (and the portrait) is off limits for Bun Bun
+const inBubbleZone = (p) => p.y > 556 || (p.y > 514 && p.x > 790 && p.x < 975);
+const homeRoute = (from) => [{ x: from.x < HOME.x ? 190 : 770, y: BEHIND_Y }, { x: HOME.x, y: BEHIND_Y }, { ...HOME }];
 const SPEED = 60; // px per second
 const rnd = (a, b) => a + Math.random() * (b - a);
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
@@ -167,27 +206,38 @@ export default function StarShop({ star, setStar, now, tod, rain, game, onClose 
     let idleUntil = last + rnd(5000, 9000);
     let waitUntil = 0;
     let row = 3;
-    let flip = 1;
     const draw = (moving) => {
       el.style.left = `${pos.x - 35}px`;
-      el.style.top = `${pos.y - 90}px`;
-      el.style.zIndex = pos.y > 388 ? 7 : 4; // behind the table at the back wall, in front on the floor
-      el.style.transform = `scaleX(${flip})`;
+      el.style.top = `${pos.y - BUNNY_H}px`;
+      // he only ever passes BEHIND the red table (everything else he walks in front of)
+      el.style.zIndex = pos.x >= 225 && pos.x <= 735 && pos.y <= 392 ? 4 : 7;
       el.classList.toggle('walking', moving);
-      spr.style.backgroundPositionY = `${-row * 90}px`;
+      spr.style.backgroundImage = `url(${moving ? shBunnyRun : shBunny})`;
+      spr.style.backgroundPositionY = `${-row * BUNNY_H}px`;
     };
     const tick = (now) => {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
       let moving = false;
-      if (queue.length === 0 && now >= idleUntil) {
-        const spot = pick(SPOTS);
+      const talking = !!live.current.bubble;
+      if (talking && inBubbleZone(pos)) {
+        // a speech box just opened over him: step out from under it
+        queue = [];
+        pos = { x: pos.x, y: pos.y - SPEED * 1.4 * dt };
+        row = 0;
+        draw(true);
+        raf = requestAnimationFrame(tick);
+        return;
+      }
+      if (queue.length === 0 && now >= idleUntil && pos.x === HOME.x && pos.y === HOME.y) {
+        const spot = pick(SPOTS.filter((sp) => !(talking && inBubbleZone(sp))));
         const side = spot.x < HOME.x ? 190 : 770;
         queue = [
           { x: HOME.x, y: BEHIND_Y }, { x: side, y: BEHIND_Y }, { ...spot, wait: rnd(4000, 8000) },
           { x: side, y: BEHIND_Y }, { x: HOME.x, y: BEHIND_Y }, { ...HOME }
         ];
       }
+      if (queue.length && talking && inBubbleZone(queue[0])) queue = homeRoute(pos);
       if (queue.length && now >= waitUntil) {
         const t = queue[0];
         const dx = t.x - pos.x;
@@ -198,11 +248,11 @@ export default function StarShop({ star, setStar, now, tod, rain, game, onClose 
           pos = { x: t.x, y: t.y };
           queue.shift();
           if (t.wait) { waitUntil = now + t.wait; row = 3; }
-          if (queue.length === 0) { idleUntil = now + rnd(8000, 16000); row = 3; flip = 1; }
+          if (queue.length === 0) { idleUntil = now + rnd(8000, 16000); row = 3; }
         } else {
           pos = { x: pos.x + (dx / dist) * step, y: pos.y + (dy / dist) * step };
           moving = true;
-          if (Math.abs(dy) > Math.abs(dx)) { row = dy < 0 ? 0 : 3; } else { row = 3; flip = dx < 0 ? -1 : 1; }
+          if (Math.abs(dy) > Math.abs(dx)) { row = dy < 0 ? 0 : 3; } else { row = dx < 0 ? 1 : 2; }
         }
       }
       draw(moving);
@@ -226,7 +276,7 @@ export default function StarShop({ star, setStar, now, tod, rain, game, onClose 
   };
   const pickSet = (set) => {
     setTab(set.id);
-    say(hint.craving.includes(set.name) ? `${set.name}... Kutitap has been eyeing this shelf!` : `${set.name}: fresh treats on the table!`);
+    say(SET_SPEECH[set.name] || `${set.name}: fresh treats on the table!`);
     sfx('grab');
   };
   const windowTalk = () => say(rain
@@ -242,12 +292,13 @@ export default function StarShop({ star, setStar, now, tod, rain, game, onClose 
         <div className={`ss-scene tod-room-${tod}`} style={{ width: SCENE_W, height: SCENE_H, transform: `scale(${scale})` }}>
           <div className="ss-wall" />
           <div className="ss-beam"><span className="ss-sign">★ STAR SNACK SHOP ★</span></div>
+          <span className="ss-coins" title="Star Coins"><Coin size={20} />{coins.toLocaleString()}</span>
           <button type="button" className="ss-leave" onClick={onClose} aria-label="Leave the shop">X</button>
           <div className="ss-floor" />
 
           {/* left wall */}
           <button type="button" className="ss-obj ss-clock" aria-label="Clock" onClick={() => say(`It is ${clockText}. Kutitap's sky changes with the time of day!`)}><img className="px-sprite" src={imgClock} alt="" /></button>
-          <img className="ss-door" src={imgDoor} alt="" />
+          <button type="button" className="ss-door-btn" aria-label="Door: leave the shop" onClick={onClose}><img src={imgDoor} alt="" /></button>
           <SkyWindow tod={tod} rain={rain} onClick={windowTalk} />
 
           {/* lamp: lights up at night */}
@@ -292,6 +343,7 @@ export default function StarShop({ star, setStar, now, tod, rain, game, onClose 
                   <div key={food.id} className="ss-slot">
                     {t === 'love' && <span className="ss-tag yum"><img className="px-sprite" src={spNote} alt="" />YUMMY!</span>}
                     {t === 'hate' && <span className="ss-tag yuck"><img className="px-sprite" src={spAnger} alt="" />YUCKY!</span>}
+                    {t === 'ok' && <span className="ss-tag okay">OKAY</span>}
                     {food.rare && !t && <span className="ss-tag rare">RARE</span>}
                     <span className={`ss-item${food.rare ? ' rare-glow' : ''}${justBought === food.id ? ' bought' : ''}`} title={food.name}>
                       <img className="px-sprite" src={food.src} alt={food.name} />
@@ -310,7 +362,7 @@ export default function StarShop({ star, setStar, now, tod, rain, game, onClose 
           {/* dialogue box (Stardew-style): name tab, portrait, wide text, Okay */}
           {bubble && (
             <>
-              <div className="ss-portrait" style={{ backgroundImage: `url(${shBunny})`, backgroundPosition: `-${portrait.col * 112}px -${portrait.row * 144}px` }} />
+              <div className="ss-portrait" style={{ backgroundImage: `url(${shBunny})`, backgroundPosition: `-${portrait.col * 112}px -${portrait.row * 152}px` }} />
               <div className="ss-name" style={{ '--dlg': `url(${PK.dialogBox})` }}>Bun Bun</div>
               <div className="ss-bubble" role="status" style={{ '--dlg': `url(${PK.dialogBox})` }}>
                 <span className="ss-bubble-text">{bubble.text}</span>

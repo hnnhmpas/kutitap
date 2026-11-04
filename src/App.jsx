@@ -79,7 +79,7 @@ import spMoon from './assets/shop/moon.png';
 import spTwinkle from './assets/shop/twinkle.png';
 import spCloud from './assets/shop/cloud.png';
 import StarShop from './StarShop';
-import GlobalTopBar from './GlobalTopBar';
+import shopIcon from './assets/ui/shop-icon.png';
 import { isRainyDay, RainDrops } from './kutitapWeather';
 import { SFX_WAV } from './kutitapShopAssets';
 
@@ -369,11 +369,16 @@ function PixelMeter({ pct, tone = 'pink', segments = 12 }) {
 // ---------------------------------------------------------------------------
 // Kutitap game helpers (Star Coins, monthly tastes, time of day)
 // ---------------------------------------------------------------------------
-const STAR_DEFAULT = { coins: 0, pantry: {}, tried: {}, caught: {}, day: '', roundsUsed: 0, bonusRounds: 0, bonusAwarded: {}, baselineDone: false };
+const STAR_DEFAULT = { coins: 0, pantry: {}, tried: {}, caught: {}, day: '', roundsUsed: 0, bonusRounds: 0, carry: 0, bonusAwarded: {}, baselineDone: false };
 const DAILY_ROUNDS = 5;
 const TRIES_PER_ROUND = 5;
 const RARE_COINS = 5;
-const roundReward = (wins, rareCaught) => (rareCaught ? RARE_COINS : wins >= 5 ? 3 : wins >= 3 ? 2 : wins >= 1 ? 1 : 0);
+// 5 prizes = 5 coins, 4 = 4, 2-3 = 3, 1 = 2, none = 0. A rare catch adds +5 on top.
+const roundReward = (wins, rareCaught) => (wins >= 5 ? 5 : wins === 4 ? 4 : wins >= 2 ? 3 : wins === 1 ? 2 : 0) + (rareCaught ? RARE_COINS : 0);
+// Collect 5 of every food in a collection (prize set) = +10 coins, then that collection's counts reset to 0.
+const COLLECTION_GOAL = 5;
+const COLLECTION_BONUS = 10;
+const dayDiff = (a, b) => Math.round((new Date(`${b}T00:00:00`) - new Date(`${a}T00:00:00`)) / 86400000);
 
 const hashStr = (s) => {
   let h = 2166136261;
@@ -434,7 +439,6 @@ function KutitapPanel({ unpaid, total, now, star, setStar, onOpenShop }) {
   const tod = todOf(now);
   const rain = isRainyDay(now);
   const monthKey = tasteMonthKey(now);
-  const monthName = now.toLocaleString('en-US', { month: 'long' });
 
   const [cheer, setCheer] = useState(false);
   const wasAllPaid = useRef(allPaid);
@@ -472,9 +476,7 @@ function KutitapPanel({ unpaid, total, now, star, setStar, onOpenShop }) {
     reactionTimer.current = setTimeout(() => setReaction(null), taste === 'love' ? 4800 : 3200);
   };
 
-  const hint = cravingHint(monthKey);
   const tried = (star.tried || {})[monthKey] || {};
-  const found = Object.entries(tried).filter(([, t]) => t !== 'ok');
   const pantry = Object.entries(star.pantry || {}).filter(([id, n]) => n > 0 && FOOD_BY_ID[id]);
 
   const message = reaction
@@ -564,17 +566,6 @@ function KutitapPanel({ unpaid, total, now, star, setStar, onOpenShop }) {
         <span>{paid}/{total} paid</span>
       </div>
       <div className="kt-note-line">Happiness depends only on your bills. Food just triggers a short reaction.</div>
-
-      <div className="kt-cravings">
-        <b>{monthName} cravings</b>
-        <span>Kutitap is craving something from: <em className="yum">{hint.craving.join(' · ')}</em></span>
-        <span>Tummy ache from: <em className="yuck">{hint.hatedSets.join(' · ')}</em></span>
-        <span className="kt-found">
-          {found.length === 0 ? 'Feed Kutitap to find its favorites! (tastes change every month)' : found.map(([id, t]) => (
-            <em key={id} className={t === 'love' ? 'yum' : 'yuck'}>{t === 'love' ? '♥ Yummy' : '✖ Yucky'}: {FOOD_BY_ID[id].name}</em>
-          ))}
-        </span>
-      </div>
 
       <div className="kt-pantry">
         <span className="kt-pantry-label">PANTRY</span>
@@ -704,9 +695,10 @@ function ClawMachine({ star, setStar, starLoaded, roundsLeft }) {
     setStar((prev) => {
       const today = localDay();
       let used = prev.day === today ? prev.roundsUsed || 0 : 0;
+      let carry = prev.carry || 0;
       let bonus = prev.bonusRounds || 0;
-      if (used < DAILY_ROUNDS) used += 1; else bonus = Math.max(0, bonus - 1);
-      return { ...prev, day: today, roundsUsed: used, bonusRounds: bonus, coins: (prev.coins || 0) + coins };
+      if (used < DAILY_ROUNDS) used += 1; else if (carry > 0) carry -= 1; else bonus = Math.max(0, bonus - 1);
+      return { ...prev, day: today, roundsUsed: used, carry, bonusRounds: bonus, coins: (prev.coins || 0) + coins };
     });
     sfx(rare ? 'rare' : coins > 0 ? 'coin' : 'miss');
   };
@@ -806,9 +798,21 @@ function ClawMachine({ star, setStar, starLoaded, roundsLeft }) {
       if (food.rare) rareRef.current = true;
       setWins(winsRef.current);
       // remember which prizes have been caught (the shadow row)
-      setStar((prev) => ({ ...prev, caught: { ...(prev.caught || {}), [food.id]: ((prev.caught || {})[food.id] || 0) + 1 } }));
-      setMsg(food.rare ? `RARE CATCH! ${food.name}!` : `You caught a ${food.name}!`);
-      setFlash(food.rare ? `RARE! ${food.name}` : food.name);
+      const collSet = FOOD_SETS.find((st) => st.foods.some((f) => f.id === food.id));
+      const seen = starRef.current.caught || {};
+      const complete = !!collSet && collSet.foods.every((f) => (seen[f.id] || 0) + (f.id === food.id ? 1 : 0) >= COLLECTION_GOAL);
+      setStar((prev) => {
+        const c = { ...(prev.caught || {}) };
+        c[food.id] = (c[food.id] || 0) + 1;
+        let coinsNow = prev.coins || 0;
+        if (collSet && collSet.foods.every((f) => (c[f.id] || 0) >= COLLECTION_GOAL)) {
+          collSet.foods.forEach((f) => { c[f.id] = 0; });
+          coinsNow += COLLECTION_BONUS;
+        }
+        return { ...prev, caught: c, coins: coinsNow };
+      });
+      setMsg(complete ? `COLLECTION COMPLETE! ${collSet.name} +${COLLECTION_BONUS} coins!` : food.rare ? `RARE CATCH! ${food.name}!` : `You caught a ${food.name}!`);
+      setFlash(complete ? `+${COLLECTION_BONUS} coins!` : food.rare ? `RARE! ${food.name}` : food.name);
       sfx('win');
       setTimeout(() => setFlash(null), 1700);
     } else if (!(await step(300))) return;
@@ -844,6 +848,8 @@ function ClawMachine({ star, setStar, starLoaded, roundsLeft }) {
   const glide = auto ? 'left 1.1s ease-in-out' : 'none';
   const locked = busy || !canPlay;
   const caught = star.caught || {};
+  const starRef = useRef(star);
+  starRef.current = star;
   const btn = { borderRadius: 0, '--px': 'pill', height: '52px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', cursor: locked ? 'not-allowed' : 'pointer', touchAction: 'none', fontWeight: 800, fontSize: '15px', opacity: locked ? 0.5 : 1 };
 
   return (
@@ -867,6 +873,7 @@ function ClawMachine({ star, setStar, starLoaded, roundsLeft }) {
         <span>Rounds left <b>{roundsLeft}</b></span>
         {(star.bonusRounds || 0) > 0 && <span className="claw-chip bonus">+{star.bonusRounds} bonus</span>}
         <span className="claw-chip set">{set.name}</span>
+        <span className="claw-coins" title="Star Coins"><StarCoin size={18} />{(star.coins || 0).toLocaleString()}</span>
       </div>
       <div className="claw-bulbs" aria-hidden="true">
         {Array.from({ length: 16 }).map((_, i) => <span key={i} className="claw-bulb" style={{ animationDelay: `${(i % 4) * 0.25}s` }} />)}
@@ -939,7 +946,7 @@ function ClawMachine({ star, setStar, starLoaded, roundsLeft }) {
       <div className="claw-rules">5 prizes = 3 · 3-4 = 2 · 1-2 = 1 · rare food = {RARE_COINS} Star Coins</div>
 
       <div className="claw-collection-wrap">
-        <div className="claw-coll-label">Prize shadows · {set.foods.filter((f) => caught[f.id] > 0).length}/{set.foods.length}</div>
+        <div className="claw-coll-label">Prize shadows · {set.foods.filter((f) => caught[f.id] > 0).length}/{set.foods.length} · 5 of each = +10</div>
         <div className="claw-collection">
           {set.foods.map((f) => (
             <div key={f.id} className={`claw-slot${caught[f.id] ? ' got' : ''}${f.rare ? ' rare-slot' : ''}`} title={caught[f.id] ? `${f.name} x${caught[f.id]}` : '???'}>
@@ -1793,7 +1800,7 @@ export default function App() {
   const kRain = isRainyDay(kNow);
   const kToday = localDay(kNow);
   const kDataReady = useDataReady(['kutitap_star', 'kutitap_utilities', 'kutitap_savings', 'kutitap_expenses', 'kutitap_loans']);
-  const kRoundsLeft = Math.max(0, DAILY_ROUNDS - (kStar.day === kToday ? kStar.roundsUsed || 0 : 0)) + (kStar.bonusRounds || 0);
+  const kRoundsLeft = (kStar.carry || 0) + Math.max(0, DAILY_ROUNDS - (kStar.day === kToday ? kStar.roundsUsed || 0 : 0)) + (kStar.bonusRounds || 0);
   // the shop is a room under the top bar; leaving it when you switch tabs
   useEffect(() => { setIsShopOpen(false); }, [activeTab]);
 
@@ -1807,7 +1814,17 @@ export default function App() {
 
   useEffect(() => {
     if (!kStarLoaded || kStar.day === kToday) return;
-    setKStar((prev) => (prev.day === kToday ? prev : { ...prev, day: kToday, roundsUsed: 0 }));
+    // a new day: unused rounds from earlier days (including days the app was not opened) carry over
+    setKStar((prev) => {
+      if (prev.day === kToday) return prev;
+      let carry = prev.carry || 0;
+      if (prev.day) {
+        carry += Math.max(0, DAILY_ROUNDS - (prev.roundsUsed || 0));
+        const gap = dayDiff(prev.day, kToday);
+        if (gap > 1) carry += DAILY_ROUNDS * (gap - 1);
+      }
+      return { ...prev, day: kToday, roundsUsed: 0, carry };
+    });
   }, [kStarLoaded, kToday, kStar.day]);
 
   useEffect(() => {
@@ -1827,6 +1844,9 @@ export default function App() {
     <>
       <script src="https://cdn.tailwindcss.com"></script>
       <PixelFX />
+      <button type="button" className={`shop-fab${isShopOpen ? ' open' : ''}`} onClick={() => setIsShopOpen((v) => !v)} aria-label="Star Snack Shop" aria-pressed={isShopOpen}>
+        <img className="px-sprite" src={shopIcon} alt="" />
+      </button>
       <div className="px-root" style={{
         position: 'fixed',
         inset: 0,
@@ -1965,11 +1985,6 @@ export default function App() {
         {/* MAIN AREA */}
         <div className="px-main" style={{ flex: 1, height: '100vh', padding: '24px 32px', boxSizing: 'border-box', overflowY: 'auto', display: 'flex', flexDirection: 'column', width: '100%' }}>
 
-          <GlobalTopBar
-            coins={kStar.coins || 0}
-            shopOpen={isShopOpen}
-            onToggleShop={() => setIsShopOpen((v) => !v)}
-          />
 
           {isShopOpen ? (
             <StarShop
@@ -2250,7 +2265,7 @@ export default function App() {
                   />
                 </div>
 
-                <div style={{ backgroundColor: 'var(--px-card)', borderRadius: 0, '--px': 'panel', padding: '20px', width: '100%', display: 'flex', flexDirection: 'column', height: '100%', maxHeight: 'calc(100vh - 100px)', boxShadow: '0 8px 25px rgba(223,177,91,0.15)' }}>
+                <div style={{ backgroundColor: 'var(--px-card)', borderRadius: 0, '--px': 'panel', padding: '20px', width: '100%', display: 'flex', flexDirection: 'column', height: '100%', boxShadow: '0 8px 25px rgba(223,177,91,0.15)' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
                     <div style={{ marginBottom: '12px', borderBottom: '2px dashed var(--px-sun)', paddingBottom: '8px', flexShrink: 0 }}>
                       <span style={{ fontSize: '15px', fontWeight: 800, color: 'var(--px-accent)', textTransform: 'uppercase' }}>Monthly Obligations</span>
@@ -2332,7 +2347,7 @@ export default function App() {
                   </div>
                 </div>
 
-                <div style={{ backgroundColor: 'var(--px-card)', borderRadius: 0, '--px': 'panel', padding: '20px', width: '100%', display: 'flex', flexDirection: 'column', height: '100%', maxHeight: 'calc(100vh - 100px)', boxShadow: '0 8px 25px rgba(223,177,91,0.15)' }}>
+                <div style={{ backgroundColor: 'var(--px-card)', borderRadius: 0, '--px': 'panel', padding: '20px', width: '100%', display: 'flex', flexDirection: 'column', height: '100%', boxShadow: '0 8px 25px rgba(223,177,91,0.15)' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', borderBottom: '2px dashed var(--px-sun)', paddingBottom: '8px', flexShrink: 0 }}>
                       <span style={{ fontSize: '15px', fontWeight: 800, color: 'var(--px-accent)', textTransform: 'uppercase' }}>Monthly Expenses</span>
