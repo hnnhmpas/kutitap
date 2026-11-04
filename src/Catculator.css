@@ -1,0 +1,51 @@
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+/* 100cqi = the calculator's current width, so every size below scales with it */
+.cx-win { position: fixed; z-index: 9990; container-type: inline-size; outline: none; user-select: none; touch-action: none; -webkit-font-smoothing: none; font-smooth: never; filter: drop-shadow(6px 8px 0 rgba(74, 29, 54, 0.28)); }
+.cx-stage { position: absolute; inset: 0; overflow: hidden; }
+.cx-shell { position: absolute; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; }
+
+/* LAYER 2 */
+.cx-lcd { position: absolute; box-sizing: border-box; padding: 1.6cqi 3cqi 1.4cqi; display: flex; flex-direction: column; justify-content: flex-end; text-align: right; color: #1f4a2f; text-shadow: 0.35cqi 0.35cqi 0 rgba(255, 255, 255, 0.28); font-family: 'Press Start 2P', monospace; overflow: hidden; pointer-events: none; }
+.cx-hist { flex: 1; min-height: 0; overflow-y: auto; text-align: left; font-size: 1.9cqi; line-height: 1.5; pointer-events: auto; scrollbar-width: none; }
+.cx-hist::-webkit-scrollbar { display: none; }
+.cx-hist-item { display: block; width: 100%; padding: 0; margin: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; opacity: 0.55; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; text-shadow: inherit; }
+.cx-hist-item:hover { opacity: 1; background: rgba(255, 255, 255, 0.3); }
+.cx-expr { font-size: 2.5cqi; line-height: 1.5; opacity: 0.75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cx-main { line-height: 1.15; white-space: nowrap; }
+
+/* LAYER 3: invisible buttons with a tactile press */
+.cx-key { position: absolute; padding: 0; margin: 0; border: 0; background: transparent; cursor: pointer; border-radius: 3cqi; -webkit-tap-highlight-color: transparent; }
+.cx-key:hover { background: rgba(255, 255, 255, 0.14); }
+.cx-key:active { transform: translateY(1.5px); background: rgba(74, 29, 54, 0.16); }
+.cx-key:focus-visible { outline: 0.7cqi dashed #fff; outline-offset: -1cqi; }
+.cx-drag { position: absolute; cursor: grab; touch-action: none; }
+.cx-drag:active { cursor: grabbing; }
+
+/* resize handles (screen px, they do not scale) */
+.cx-h { position: absolute; touch-action: none; z-index: 5; }
+.cx-h.n, .cx-h.s { left: 12px; right: 12px; height: 10px; cursor: ns-resize; }
+.cx-h.e, .cx-h.w { top: 12px; bottom: 12px; width: 10px; cursor: ew-resize; }
+.cx-h.n { top: -5px; } .cx-h.s { bottom: -5px; } .cx-h.e { right: -5px; } .cx-h.w { left: -5px; }
+.cx-h.ne, .cx-h.nw, .cx-h.se, .cx-h.sw { width: 18px; height: 18px; }
+.cx-h.ne { top: -6px; right: -6px; cursor: nesw-resize; } .cx-h.nw { top: -6px; left: -6px; cursor: nwse-resize; }
+.cx-h.se { bottom: -6px; right: -6px; cursor: nwse-resize; } .cx-h.sw { bottom: -6px; left: -6px; cursor: nesw-resize; }
+.cx-h.ne:hover, .cx-h.nw:hover, .cx-h.se:hover, .cx-h.sw:hover { background: rgba(255, 255, 255, 0.5); }
+
+/* minimized: floating desktop badge */
+.cx-catcrop { display: block; background-repeat: no-repeat; image-rendering: pixelated; }
+.cx-badge { position: fixed; z-index: 9990; width: 84px; padding: 8px 0 8px; display: flex; flex-direction: column; align-items: center; gap: 6px; border: 0; cursor: pointer; background: #FF75B5; color: #1f4a2f; touch-action: none; user-select: none; box-shadow: 0 0 0 3px #1b0a14, inset 0 3px 0 #FFA8D3, inset 0 -4px 0 #E0619C, 5px 6px 0 3px rgba(74, 29, 54, 0.3); clip-path: polygon(0 6px, 6px 6px, 6px 0, calc(100% - 6px) 0, calc(100% - 6px) 6px, 100% 6px, 100% calc(100% - 6px), calc(100% - 6px) calc(100% - 6px), calc(100% - 6px) 100%, 6px 100%, 6px calc(100% - 6px), 0 calc(100% - 6px)); animation: cx-bob 1.4s steps(2) infinite; }
+.cx-badge-lcd { box-sizing: border-box; width: 70px; padding: 4px 4px; background: #C7E8CA; box-shadow: 0 0 0 2px #1b0a14; font: 8px/1 'Press Start 2P', monospace; text-align: right; overflow: hidden; }
+@keyframes cx-bob { 50% { transform: translateY(-3px); } }
+
+/* closed: floating "Reopen" pixel button */
+.cx-reopen { position: fixed; right: 96px; bottom: 18px; z-index: 9990; display: flex; align-items: center; gap: 8px; padding: 8px 14px 8px 10px; border: 0; cursor: pointer; background: #86EFAC; color: #14532d; font: 10px/1 'Press Start 2P', monospace; box-shadow: 0 0 0 3px #1b0a14, inset 0 3px 0 #bff7d2, inset 0 -4px 0 #4ADE80, 5px 6px 0 3px rgba(74, 29, 54, 0.3); clip-path: polygon(0 6px, 6px 6px, 6px 0, calc(100% - 6px) 0, calc(100% - 6px) 6px, 100% 6px, 100% calc(100% - 6px), calc(100% - 6px) calc(100% - 6px), calc(100% - 6px) 100%, 6px 100%, 6px calc(100% - 6px), 0 calc(100% - 6px)); }
+.cx-reopen:hover { filter: brightness(1.06); }
+.cx-reopen:active { transform: translateY(1.5px); }
+@media (prefers-reduced-motion: reduce) { .cx-badge { animation: none; } }
+
+/* smooth open / close (grows out of the calculator icon) */
+.cx-win.in { animation: cx-in 0.26s cubic-bezier(0.2, 0.9, 0.3, 1.15) both; }
+.cx-win.out { animation: cx-out 0.22s cubic-bezier(0.5, 0, 0.9, 0.4) both; pointer-events: none; }
+@keyframes cx-in { from { opacity: 0; transform: scale(0.12); } 60% { opacity: 1; } to { opacity: 1; transform: scale(1); } }
+@keyframes cx-out { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(0.12); } }

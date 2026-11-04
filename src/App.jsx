@@ -81,7 +81,7 @@ import spCloud from './assets/shop/cloud.png';
 import StarShop from './StarShop';
 import shopIcon from './assets/ui/shop-icon.png';
 import calcIcon from './assets/ui/calc-icon.png';
-import Calculator from './Calculator';
+import Catculator from './Catculator';
 import { isRainyDay, RainDrops } from './kutitapWeather';
 import { SFX_WAV } from './kutitapShopAssets';
 
@@ -463,6 +463,11 @@ function KutitapPanel({ unpaid, total, now, star, setStar, onOpenShop }) {
     const food = FOOD_BY_ID[id];
     if (!food || reaction) return;
     const taste = tasteOf(monthKey, id);
+    const today = localDay(now);
+    // liked food: +1 bonus round. hated food: -1 round (bonus first, then carried, then today's). alright: no change.
+    const usedNow = star.day === today ? star.roundsUsed || 0 : 0;
+    const roundsLeftNow = (star.carry || 0) + Math.max(0, DAILY_ROUNDS - usedNow) + (star.bonusRounds || 0);
+    const roundDelta = taste === 'love' ? 1 : taste === 'hate' && roundsLeftNow > 0 ? -1 : 0;
     setStar((prev) => {
       const have = (prev.pantry || {})[id] || 0;
       if (have <= 0) return prev;
@@ -470,9 +475,19 @@ function KutitapPanel({ unpaid, total, now, star, setStar, onOpenShop }) {
       if (have - 1 > 0) pantry[id] = have - 1; else delete pantry[id];
       const tried = { ...(prev.tried || {}) };
       tried[monthKey] = { ...(tried[monthKey] || {}), [id]: taste };
-      return { ...prev, pantry, tried };
+      const next = { ...prev, pantry, tried };
+      if (taste === 'love') next.bonusRounds = (prev.bonusRounds || 0) + 1;
+      if (taste === 'hate') {
+        if ((prev.bonusRounds || 0) > 0) next.bonusRounds = prev.bonusRounds - 1;
+        else if ((prev.carry || 0) > 0) next.carry = prev.carry - 1;
+        else {
+          const used = prev.day === today ? prev.roundsUsed || 0 : 0;
+          if (used < DAILY_ROUNDS) { next.day = today; next.roundsUsed = used + 1; }
+        }
+      }
+      return next;
     });
-    setReaction({ taste, food });
+    setReaction({ taste, food, roundDelta });
     sfx(taste === 'love' ? 'sing' : taste === 'hate' ? 'angry' : 'munch');
     clearTimeout(reactionTimer.current);
     reactionTimer.current = setTimeout(() => setReaction(null), taste === 'love' ? 4800 : 3200);
@@ -482,8 +497,8 @@ function KutitapPanel({ unpaid, total, now, star, setStar, onOpenShop }) {
   const pantry = Object.entries(star.pantry || {}).filter(([id, n]) => n > 0 && FOOD_BY_ID[id]);
 
   const message = reaction
-    ? reaction.taste === 'love' ? `♪ Yummy! ${reaction.food.name} is my favorite this month! ♪`
-      : reaction.taste === 'hate' ? `Ew... I do NOT like ${reaction.food.name}!`
+    ? reaction.taste === 'love' ? `♪ Yummy! ${reaction.food.name} is my favorite this month! +1 claw round! ♪`
+      : reaction.taste === 'hate' ? `Ew... I do NOT like ${reaction.food.name}!${reaction.roundDelta < 0 ? ' -1 claw round...' : ''}`
       : `Nom nom... ${reaction.food.name} is alright.`
     : {
       sleep: 'Nothing to pay yet. Kutitap is napping...',
@@ -1854,7 +1869,7 @@ export default function App() {
       <button type="button" className={`calc-fab${calcMode === 'open' ? ' open' : ''}`} onClick={() => setCalcMode((m) => (m === 'open' ? 'min' : 'open'))} aria-label="Catculator" title="Catculator" aria-pressed={calcMode === 'open'}>
         <img className="px-sprite" src={calcIcon} alt="" />
       </button>
-      <Calculator mode={calcMode} setMode={setCalcMode} history={calcHistory} setHistory={setCalcHistory} />
+      <Catculator mode={calcMode} setMode={setCalcMode} history={calcHistory} setHistory={setCalcHistory} />
       <div className="px-root" style={{
         position: 'fixed',
         inset: 0,

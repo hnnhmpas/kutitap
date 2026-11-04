@@ -252,7 +252,7 @@ export default function StarShop({ star, setStar, now, tod, rain, game, onClose 
         } else {
           pos = { x: pos.x + (dx / dist) * step, y: pos.y + (dy / dist) * step };
           moving = true;
-          if (Math.abs(dy) > Math.abs(dx)) { row = dy < 0 ? 0 : 3; } else { row = dx < 0 ? 1 : 2; }
+          if (Math.abs(dy) > Math.abs(dx)) { row = dy < 0 ? 0 : 3; } else { row = 3; }
         }
       }
       draw(moving);
