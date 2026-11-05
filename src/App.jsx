@@ -79,6 +79,8 @@ import spMoon from './assets/shop/moon.png';
 import spTwinkle from './assets/shop/twinkle.png';
 import spCloud from './assets/shop/cloud.png';
 import StarShop from './StarShop';
+import KutitapFarm from './farm/KutitapFarm';
+import { FARM_DEFAULT } from './farm/farmLogic';
 import shopIcon from './assets/ui/shop-icon.png';
 import calcIcon from './assets/ui/calc-icon.png';
 import Catculator from './Catculator';
@@ -1811,6 +1813,7 @@ export default function App() {
 
   // ---- Kutitap game: Star Coins, pantry, rounds (all saved to Firebase) ----
   const [kStar, setKStar, kStarLoaded] = useFirebaseSync('kutitap_star', STAR_DEFAULT);
+  const [farm, setFarm] = useFirebaseSync('kutitap_farm', FARM_DEFAULT);
   const [isShopOpen, setIsShopOpen] = useState(false);
   const [calcMode, setCalcMode] = useState('closed'); // closed | min | open
   const [calcHistory, setCalcHistory] = useFirebaseSync('kutitap_calc_history', []);
@@ -2588,6 +2591,8 @@ export default function App() {
                   </div>
                 </div>
               )}
+
+              <KutitapFarm goals={savingsGoals} farm={farm} setFarm={setFarm} />
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', flex: 1, overflowY: 'auto' }}>
                 {savingsGoals.length === 0 ? (
