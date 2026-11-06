@@ -13,12 +13,22 @@ import catLeftUrl from '../assets/pixel/cat-walk-left.png';
 import catRightUrl from '../assets/pixel/cat-walk-right.png';
 import catIdleUrl from '../assets/pixel/cat-happy.png';
 import twinkleUrl from '../assets/shop/twinkle.png';
+import coinUrl from '../assets/shop/star-coin.png';
+import teemoUrl from '../assets/farm/teemo.png';
+import toolsUrl from '../assets/farm/tools.png';
+import cowUrl from '../assets/farm/cow.png';
+import chickenUrl from '../assets/farm/chicken.png';
+import fishUrl from '../assets/farm/fish.png';
+import bridgeUrl from '../assets/farm/bridge.png';
+import cropsWetUrl from '../assets/farm/crops_watered.png';
+export { default as FRAME_URL } from '../assets/farm/ui/frame.png';
+export { default as SLOT_URL } from '../assets/farm/ui/slot.png';
 import { CROP_BY_ID, cellHash } from './farmLogic.js';
 
 export const CROPS_SHEET_URL = cropsUrl;
 const load = (src) => new Promise((res) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(i); i.src = src; });
 export async function loadImages() {
-  const names = { grass: grassUrl, dirt: dirtUrl, water: waterUrl, fences: fencesUrl, biom: biomUrl, crops: cropsUrl, trees: treesUrl, boat: boatUrl, cabin: cabinUrl, catDown: catDownUrl, catLeft: catLeftUrl, catRight: catRightUrl, catIdle: catIdleUrl, twinkle: twinkleUrl };
+  const names = { grass: grassUrl, dirt: dirtUrl, water: waterUrl, fences: fencesUrl, biom: biomUrl, crops: cropsUrl, trees: treesUrl, boat: boatUrl, cabin: cabinUrl, catDown: catDownUrl, catLeft: catLeftUrl, catRight: catRightUrl, catIdle: catIdleUrl, twinkle: twinkleUrl, coin: coinUrl, teemo: teemoUrl, tools: toolsUrl, cow: cowUrl, chicken: chickenUrl, fish: fishUrl, bridge: bridgeUrl, cropsWet: cropsWetUrl };
   const out = {}; await Promise.all(Object.entries(names).map(async ([k, u]) => { out[k] = await load(u); }));
   out.sp = makeSprites(out);
   return out;
@@ -80,20 +90,24 @@ export function bakeGround(world, im) {
     else g.drawImage(autoTile('g', im.grass, land, x, y, 8), x * 16, y * 16);
   });
   patch.forEach((k) => { const [x, y] = k.split(',').map(Number); g.drawImage(autoTile('d', im.dirt, patch, x, y, 10), x * 16, y * 16); });
+  (world.bridges || []).forEach((b) => {
+    if (b.dir === 'h') { const n = (b.x1 - b.x0) * 16 + 10; for (let xx = 0; xx < n; xx++) { const sx = xx < 14 ? xx : xx >= n - 14 ? 29 + (xx - (n - 14)) : 14 + ((xx - 14) % 15); g.drawImage(im.bridge, 34 + sx, 0, 1, 16, b.x0 * 16 - 5 + xx, b.y * 16, 1, 16); } }
+    else { const n = (b.y1 - b.y0) * 16 + 10; for (let yy = 0; yy < n; yy++) { const sy = yy < 14 ? yy : yy >= n - 14 ? 29 + (yy - (n - 14)) : 14 + ((yy - 14) % 15); g.drawImage(im.bridge, 0, 2 + sy, 16, 1, b.x * 16, b.y0 * 16 - 5 + yy, 16, 1); } }
+  });
   return c;
 }
 
 // ---------- static sprites (sorted by y) ----------
 const TALL_ROWS = new Set([1, 16, 23, 25, 29]);
-export function drawCrop(g, im, cropId, stage, tx, ty) {
+export function drawCrop(g, im, cropId, stage, tx, ty, wet) {
   const c = CROP_BY_ID[cropId]; if (!c) return;
-  const tall = TALL_ROWS.has(c.row); const col = stage; // 0 = seed packet
-  if (tall) g.drawImage(im.crops, col * 16, (c.row - 1) * 16, 16, 32, tx * 16, ty * 16 - 16, 16, 32);
-  else g.drawImage(im.crops, col * 16, c.row * 16, 16, 16, tx * 16, ty * 16, 16, 16);
+  const tall = TALL_ROWS.has(c.row); const col = stage; const sh = wet && im.cropsWet ? im.cropsWet : im.crops; // 0 = seed packet
+  if (tall) g.drawImage(sh, col * 16, (c.row - 1) * 16, 16, 32, tx * 16, ty * 16 - 16, 16, 32);
+  else g.drawImage(sh, col * 16, c.row * 16, 16, 16, tx * 16, ty * 16, 16, 16);
 }
-export function buildSprites(world, plotsById, im) {
+export function buildSprites(world, plotsById, im, wet) {
   const L = [], sp = im.sp;
-  const put = (spr, tx, ty, dy = 0) => L.push({ y: ty * 16 + 16 + dy, draw: (g) => g.drawImage(spr, Math.round(tx * 16 + 8 - spr.width / 2), ty * 16 + 16 - spr.height + dy) });
+  const put = (spr, tx, ty, dy = 0) => { const key = `${tx},${ty}`; L.push({ y: ty * 16 + 16 + dy, draw: (g, env) => { const sh = env && env.shake[key] > env.T ? Math.sin(env.T * 46) * Math.min(1.4, (env.shake[key] - env.T) * 3) : 0; g.drawImage(spr, Math.round(tx * 16 + 8 - spr.width / 2 + sh), ty * 16 + 16 - spr.height + dy); } }); };
   world.decor.forEach((d) => {
     if (d.kind === 'tree') put(sp.tree[d.v] || sp.tree.mid, d.x, d.y, 4);
     else { const arr = sp[d.kind]; if (arr) put(arr[d.v % arr.length], d.x, d.y, d.kind === 'tuft' ? 3 : 2); }
@@ -110,7 +124,7 @@ export function buildSprites(world, plotsById, im) {
   world.plots.forEach((wp) => {
     const plot = plotsById[wp.id]; if (!plot) return;
     wp.cells.forEach((c) => { const pl = plot.planters[c.i]; if (pl && !pl.crop) L.push({ y: c.y * 16 + 8, draw: (g) => { g.fillStyle = 'rgba(255,243,212,.85)'; g.fillRect(c.x * 16 + 7, c.y * 16 + 5, 2, 6); g.fillRect(c.x * 16 + 5, c.y * 16 + 7, 6, 2); } });
-      if (pl && pl.crop) L.push({ y: c.y * 16 + 16, draw: (g) => drawCrop(g, im, pl.crop, plot.stage, c.x, c.y) }); });
+      if (pl && pl.crop) L.push({ y: c.y * 16 + 16, draw: (g) => drawCrop(g, im, pl.crop, plot.stage, c.x, c.y, wet && wet(plot.id, pl.key)) }); });
   });
   L.sort((a, b) => a.y - b.y);
   return L;

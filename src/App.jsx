@@ -2436,7 +2436,7 @@ export default function App() {
           {/* SAVINGS TAB */}
           {activeTab === 'savings' && (
             <div style={{ width: '100%', display: 'flex', flexDirection: 'column', minHeight: '100%', gap: '20px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', backgroundColor: 'var(--px-card)', padding: '24px 28px', borderRadius: 0, '--px': 'panel', boxShadow: '0 10px 30px rgba(223,177,91,0.18)', flexShrink: 0 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', position: 'sticky', top: '-24px', zIndex: 30, backgroundColor: 'var(--px-card)', padding: '24px 28px', borderRadius: 0, '--px': 'panel', boxShadow: '0 10px 30px rgba(223,177,91,0.18)', flexShrink: 0 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px' }}>
                   <div>
                     <h2 className="kutitap-title" style={{ fontSize: '24px', color: 'var(--px-accent)', margin: '0 0 4px 0', display: 'flex', alignItems: 'center', gap: '10px' }}><Sprite src={spPudding} className="px-logo-sprite" /> Honey Pot</h2>
@@ -2592,9 +2592,9 @@ export default function App() {
                 </div>
               )}
 
-              <KutitapFarm goals={savingsGoals} farm={farm} setFarm={setFarm} />
+              <KutitapFarm goals={savingsGoals} farm={farm} setFarm={setFarm} onCoins={(n) => setKStar((p) => ({ ...(p || {}), coins: ((p && p.coins) || 0) + n }))} />
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', flex: 1, overflowY: 'auto' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', flex: 'none' }}>
                 {savingsGoals.length === 0 ? (
                   <div style={{ textAlign: 'center', padding: '48px', backgroundColor: 'var(--px-card)', borderRadius: 0, '--px': 'panel', color: 'var(--ink)', fontWeight: 800, fontSize: '16px' }}>
                     <Sprite src={spBunny} className="px-empty-sprite" />
