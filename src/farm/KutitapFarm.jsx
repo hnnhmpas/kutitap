@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CROPS, plotsFromGoals, MAX_PLOTS } from './farmLogic.js';
 import { buildWorld, findPath, nearestWalkable } from './farmWorld.js';
-import { loadImages, bakeGround, buildSprites, CROPS_SHEET_URL, FRAME_URL, SLOT_URL } from './farmRender.js';
+import { loadImages, bakeGround, buildSprites, CROPS_SHEET_URL, FRAME_URL, SLOT_URL, FACE_URL, SPROUT_URL, CAN_URL } from './farmRender.js';
 import { initLife, updateLife, addParts, drawWaterFx, drawParts, animalItems, drawTeemo } from './farmLife.js';
 
 const WATER = '#9bd4c3';
@@ -10,8 +10,9 @@ const sfxEvt = (type) => { try { window.dispatchEvent(new CustomEvent('kutitap-s
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const rnd = (a, b) => a + Math.random() * (b - a);
 const dayKey = () => { const d = new Date(); return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; };
-const btn = { width: 34, height: 34, background: '#fff3d4', border: '3px solid #4a1d36', boxShadow: '2px 2px 0 rgba(74,29,54,.35)', color: '#4a1d36', fontFamily: 'SproutPx, monospace', fontSize: 16, cursor: 'pointer', padding: 0, lineHeight: 1 };
-const SEQ_IDLE = ['dance', 'chop', 'mine', 'water', 'sleep', 'wander', 'dance', 'chop'];
+const btn = { width: 38, height: 38, background: '#fff3d4', border: '3px solid #4a1d36', boxShadow: '2px 2px 0 rgba(74,29,54,.35)', color: '#4a1d36', fontFamily: 'inherit', fontWeight: 400, textTransform: 'none', fontSize: 16, cursor: 'pointer', padding: 0, lineHeight: 1 };
+const SEQ_IDLE = ['dance', 'chop', 'mine', 'sleep', 'wander', 'dance', 'chop'];   // watering only happens when the user asks for it
+const TRACKER_FONT = "'DotGothic16', 'Pixelify Sans', ui-monospace, 'Courier New', monospace";
 
 export default function KutitapFarm({ goals, farm, setFarm, onCoins }) {
   const plots = useMemo(() => plotsFromGoals(goals, farm), [goals, farm]);
@@ -31,7 +32,7 @@ export default function KutitapFarm({ goals, farm, setFarm, onCoins }) {
   S.world = world; S.plotsById = plotsById; S.imgs = imgs; S.waterMode = waterMode;
   if (typeof window !== 'undefined' && window.__FARM_DEBUG) window.__farmS = S;
 
-  useEffect(() => { let on = true; loadImages().then((i) => { if (on) setImgs(i); }); try { document.fonts && document.fonts.load('14px SproutPx'); } catch (e) { /* ignore */ } return () => { on = false; }; }, []);
+  useEffect(() => { let on = true; loadImages().then((i) => { if (on) setImgs(i); }); try { document.fonts && document.fonts.load('400 14px "Pixelify Sans"'); } catch (e) { /* ignore */ } return () => { on = false; }; }, []);
   useEffect(() => { // today's watering state from the synced farm data (nothing carries over to a new day)
     const w = farm && farm.water; const today = dayKey();
     if (S.day !== today) { S.wet.clear(); S.paid.clear(); S.day = today; }
@@ -88,7 +89,7 @@ export default function KutitapFarm({ goals, farm, setFarm, onCoins }) {
     return list.length;
   };
   const toWorld = (sx, sy) => ({ x: S.cam.x + (sx - S.size.w / 2) / S.cam.z, y: S.cam.y + (sy - S.size.h / 2) / S.cam.z });
-  const zoomBy = (f, sx, sy) => { const z = clamp(S.cam.tz * f, 0.5, 6); S.cam.tz = z; if (sx != null) { const w = toWorld(sx, sy); S.anchor = { sx, sy, wx: w.x, wy: w.y }; } else S.anchor = null; };
+  const zoomBy = (f, sx, sy) => { const z = clamp(S.cam.tz * f, 0.3, 6); S.cam.tz = z; if (sx != null) { const w = toWorld(sx, sy); S.anchor = { sx, sy, wx: w.x, wy: w.y }; } else S.anchor = null; };
 
   const hitTest = (sx, sy) => {
     for (const b of S.bubbles) if (sx >= b.x && sx <= b.x + b.w && sy >= b.y && sy <= b.y + b.h) return { type: b.kind, id: b.id };
@@ -126,10 +127,6 @@ export default function KutitapFarm({ goals, farm, setFarm, onCoins }) {
     if (type === 'dance' || type === 'sleep') { startAct(type, null); return; }
     if (type === 'chop') { const t = nearest('tree'); if (t && approach({ x: t.x, y: t.y }, 'chop', { key: `${t.x},${t.y}` })) return; startAct('dance', null); return; }
     if (type === 'mine') { const t = nearest('rock'); if (t && approach({ x: t.x, y: t.y }, 'mine', { key: `${t.x},${t.y}` })) return; startAct('dance', null); return; }
-    if (type === 'water') { // cosmetic flourish over a plant that was already watered today
-      const pool = []; wd.plots.forEach((wp) => { const p = S.plotsById[wp.id]; if (p) wp.cells.forEach((cc) => { const pl = p.planters[cc.i]; if (pl && pl.crop && S.wet.has(`${wp.id}|${pl.key}`)) pool.push(cc); }); });
-      if (pool.length) { const t = pool[Math.floor(Math.random() * pool.length)]; if (approach({ x: t.x, y: t.y }, 'water', { flourish: true })) return; }
-    }
     walkTo(cell().x + Math.round(rnd(-7, 7)), cell().y + Math.round(rnd(-5, 5)));
   };
 
@@ -183,14 +180,14 @@ export default function KutitapFarm({ goals, farm, setFarm, onCoins }) {
       wd.plots.forEach((wp) => { const p = S.plotsById[wp.id]; if (p && p.ready) wp.cells.forEach((cc, k) => { const ph = (T * 1.5 + k * 0.7) % 2; if (ph < 1) g.drawImage(imgs.twinkle, Math.round(cc.x * 16 + (k * 5) % 12), Math.round(cc.y * 16 - 6 - ph * 6)); }); });
       drawParts(g, L, imgs);
       // screen space overlays
-      g.setTransform(dpr, 0, 0, dpr, 0, 0); g.font = '13px SproutPx, monospace'; g.textBaseline = 'middle'; S.bubbles = [];
+      g.setTransform(dpr, 0, 0, dpr, 0, 0); g.font = `400 14px ${TRACKER_FONT}`; g.textBaseline = 'middle'; S.bubbles = [];
       const toS = (wx, wy) => ({ x: (wx - cam.x) * cam.z + w / 2, y: (wy - cam.y) * cam.z + h / 2 });
       const box = (x, y, bw, bh, fill) => { g.fillStyle = '#4a1d36'; g.fillRect(x - 3, y, bw + 6, bh); g.fillRect(x, y - 3, bw, bh + 6); g.fillStyle = fill; g.fillRect(x, y, bw, bh); };
-      wd.plots.forEach((wp) => {
+      if (cam.z >= 1.5) wd.plots.forEach((wp) => {
         const p = S.plotsById[wp.id]; if (!p) return;
         const a = toS(wp.center.x * 16, wp.fence.y0 * 16 - 8 + Math.sin(T * 3) * 1.5);
-        if (p.ready) { const tw = g.measureText('Harvest!').width + 36, bh = 26, x = a.x - tw / 2, y = a.y - bh - 8;
-          box(x, y, tw, bh, '#ffe9a8'); g.fillStyle = '#4a1d36'; g.beginPath(); g.moveTo(a.x - 6, y + bh); g.lineTo(a.x + 6, y + bh); g.lineTo(a.x, y + bh + 8); g.fill(); g.textAlign = 'left'; g.fillText('Harvest!', x + 28, y + bh / 2 + 1);
+        if (p.ready) { const tw = g.measureText('Harvest').width + 36, bh = 26, x = a.x - tw / 2, y = a.y - bh - 8;
+          box(x, y, tw, bh, '#ffe9a8'); g.fillStyle = '#4a1d36'; g.beginPath(); g.moveTo(a.x - 6, y + bh); g.lineTo(a.x + 6, y + bh); g.lineTo(a.x, y + bh + 8); g.fill(); g.textAlign = 'left'; g.fillText('Harvest', x + 28, y + bh / 2 + 1);
           g.fillStyle = '#ffc23c'; g.fillRect(x + 8, y + 6, 14, 14); g.fillStyle = '#c2306b'; g.fillRect(x + 12, y + 10, 6, 6); S.bubbles.push({ kind: 'harvest', id: wp.id, x, y, w: tw, h: bh + 8 }); return; }
         const need = p.planters.filter((q) => q.crop); const todo = need.filter((q) => !S.wet.has(`${wp.id}|${q.key}`));
         if (need.length && todo.length && !S.tasks.some((t) => t.plotId === wp.id) && !(c.act && c.act.task && c.act.task.plotId === wp.id)) {
@@ -229,7 +226,7 @@ export default function KutitapFarm({ goals, farm, setFarm, onCoins }) {
   const choose = (cropId) => { if (!pPlot || !pPl || pPl.locked) return;     // planting is free: nothing is charged
     setFarm((prev) => { const base = prev || {}; const crops = { ...(base.crops || {}) }; crops[pPlot.id] = { ...(crops[pPlot.id] || {}), [pPl.key]: cropId }; return { ...base, v: 1, crops, basket: base.basket || {}, harvested: base.harvested || {} }; });
     sfxEvt('drop'); setPicker(null); };
-  const fit = () => { const wd = S.world; S.follow = false; S.anchor = null; S.cam.tz = clamp(Math.min(S.size.w / (wd.W * 16), S.size.h / (wd.H * 16)) * 0.95, 0.5, 6); S.cam.x = wd.W * 8; S.cam.y = wd.H * 8; };
+  const fit = () => { const wd = S.world; S.follow = false; S.anchor = null; S.cam.tz = clamp(Math.min(S.size.w / (wd.W * 16), S.size.h / (wd.H * 16)) * 0.95, 0.3, 6); S.cam.x = wd.W * 8; S.cam.y = wd.H * 8; };
   const home = () => { S.follow = true; S.anchor = null; S.cat.idle = 0; };
   const shown = hoverCrop || (pPl && pPl.crop);
   const shownName = shown ? (CROPS.find((c) => c.id === shown) || {}).name : null;
@@ -245,18 +242,18 @@ export default function KutitapFarm({ goals, farm, setFarm, onCoins }) {
       <div style={{ position: 'absolute', top: 12, right: 30, display: 'flex', flexDirection: 'column', gap: 6 }}>
         <button style={btn} aria-label="Zoom in" onClick={() => zoomBy(1.25)}>+</button>
         <button style={btn} aria-label="Zoom out" onClick={() => zoomBy(1 / 1.25)}>-</button>
-        <button style={{ ...btn, fontSize: 12 }} aria-label="Follow Kutitap" onClick={home}>CAT</button>
-        <button style={{ ...btn, fontSize: 12 }} aria-label="Show whole island" onClick={fit}>ALL</button>
-        <button style={{ ...btn, fontSize: 11, background: waterMode ? '#9bd4ff' : '#fff3d4' }} aria-pressed={waterMode} aria-label="Water mode" onClick={() => { setWaterMode((v) => !v); setPicker(null); }}>H2O</button>
+        <button style={btn} aria-label="Follow Kutitap" title="Follow Kutitap" onClick={home}><img src={FACE_URL} alt="" style={{ width: 25, height: 21, imageRendering: 'pixelated', display: 'block', margin: '0 auto' }} /></button>
+        <button style={btn} aria-label="Show whole map" title="Show the whole map" onClick={fit}><img src={SPROUT_URL} alt="" style={{ width: 24, height: 20, imageRendering: 'pixelated', display: 'block', margin: '0 auto' }} /></button>
+        <button style={{ ...btn, background: waterMode ? '#9bd4ff' : '#fff3d4' }} aria-pressed={waterMode} aria-label="Water mode" title="Water mode: tap a plant to water it" onClick={() => { setWaterMode((v) => !v); setPicker(null); }}><img src={CAN_URL} alt="" style={{ width: 28, height: 16, imageRendering: 'pixelated', display: 'block', margin: '0 auto' }} /></button>
       </div>
-      {waterMode && <div style={{ position: 'absolute', left: 34, top: 14, background: '#d8f0ff', border: '3px solid #4a1d36', padding: '5px 9px', fontFamily: 'SproutPx, monospace', fontSize: 11, color: '#4a1d36' }}>Water mode: tap a plant</div>}
-      {plots.length === 0 && imgs && <div style={{ position: 'absolute', left: 34, bottom: 20, background: '#fffdf3', border: '3px solid #4a1d36', padding: '8px 12px', fontFamily: 'SproutPx, monospace', fontSize: 13, color: '#4a1d36' }}>Add a savings goal to plant your first plot!</div>}
-      {toast && <div style={{ position: 'absolute', left: '50%', top: 14, transform: 'translateX(-50%)', background: '#ffe9a8', border: '3px solid #4a1d36', padding: '8px 14px', fontFamily: 'SproutPx, monospace', fontSize: 13, color: '#4a1d36', maxWidth: '86%', textAlign: 'center', zIndex: 4 }}>{toast}</div>}
-      {goals && goals.filter((g) => g && g.monthsList && g.monthsList.length).length > MAX_PLOTS && <div style={{ position: 'absolute', left: 34, bottom: 14, background: '#fffdf3', border: '3px solid #4a1d36', padding: '4px 8px', fontFamily: 'SproutPx, monospace', fontSize: 11, color: '#4a1d36' }}>Showing the first {MAX_PLOTS} goals</div>}
+      {waterMode && <div style={{ position: 'absolute', left: 34, top: 14, background: '#d8f0ff', border: '3px solid #4a1d36', padding: '5px 9px', fontFamily: 'inherit', fontWeight: 400, textTransform: 'none', fontSize: 11, color: '#4a1d36' }}>Water mode: tap a plant</div>}
+      {plots.length === 0 && imgs && <div style={{ position: 'absolute', left: 34, bottom: 20, background: '#fffdf3', border: '3px solid #4a1d36', padding: '8px 12px', fontFamily: 'inherit', fontWeight: 400, textTransform: 'none', fontSize: 13, color: '#4a1d36' }}>Add a savings goal to plant your first plot!</div>}
+      {toast && <div style={{ position: 'absolute', left: '50%', top: 14, transform: 'translateX(-50%)', background: '#ffe9a8', border: '3px solid #4a1d36', padding: '8px 14px', fontFamily: 'inherit', fontWeight: 400, textTransform: 'none', fontSize: 13, color: '#4a1d36', maxWidth: '86%', textAlign: 'center', zIndex: 4 }}>{toast}</div>}
+      {goals && goals.filter((g) => g && g.monthsList && g.monthsList.length).length > MAX_PLOTS && <div style={{ position: 'absolute', left: 34, bottom: 14, background: '#fffdf3', border: '3px solid #4a1d36', padding: '4px 8px', fontFamily: 'inherit', fontWeight: 400, textTransform: 'none', fontSize: 11, color: '#4a1d36' }}>Showing the first {MAX_PLOTS} goals</div>}
       {pPlot && pPl && (
         <div role="dialog" aria-label="Pick a crop" style={{ position: 'absolute', left: 8, right: 8, bottom: 8, zIndex: 5, display: 'flex', flexDirection: 'column', alignItems: 'center', pointerEvents: 'none' }}>
-          <div style={{ pointerEvents: 'auto', background: '#fff3d4', border: '3px solid #4a1d36', padding: '4px 10px', marginBottom: 4, fontFamily: 'SproutPx, monospace', fontSize: 12, color: '#4a1d36', display: 'flex', gap: 10, alignItems: 'center', boxShadow: '2px 2px 0 rgba(74,29,54,.35)' }}>
-            <span>{pPlot.name} - {pPl.label}</span><span style={{ color: '#8a5a74' }}>{pPl.locked ? 'paid: locked in' : (shownName ? `${shownName} - free` : 'plant anything, free')}</span>
+          <div style={{ pointerEvents: 'auto', background: '#fff3d4', border: '3px solid #4a1d36', padding: '4px 10px', marginBottom: 4, fontFamily: TRACKER_FONT, fontWeight: 400, textTransform: 'none', fontSize: 14, color: '#4a1d36', display: 'flex', gap: 10, alignItems: 'center', boxShadow: '2px 2px 0 rgba(74,29,54,.35)' }}>
+            <span>{pPlot.name} - {pPl.label}</span><span style={{ color: '#8a5a74' }}>{pPl.locked ? 'paid: locked in' : (shownName || 'pick a crop')}</span>
             <button onClick={() => setPicker(null)} aria-label="Close" style={{ ...btn, width: 22, height: 22, fontSize: 11 }}>X</button>
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 5, padding: 8, pointerEvents: 'auto', borderStyle: 'solid', borderWidth: '18px 18px', borderImage: `url(${FRAME_URL}) 9 fill / 18px / 0 stretch`, imageRendering: 'pixelated', boxSizing: 'border-box', maxWidth: '100%' }}>

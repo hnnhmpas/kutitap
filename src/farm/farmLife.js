@@ -24,21 +24,22 @@ export function updateLife(L, world, dt, T) {
     } else {
       a.wait -= dt; a.t += dt * 0.5;
       if (a.wait <= 0) {
-        const opts = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => [a.tx + dx, a.ty + dy]).filter(([x, y]) => world.walk[y * world.W + x] && !world.bridgeSet.has(`${x},${y}`) && !occ.has(`${x},${y}`) && world.owner.get(`${x},${y}`) === a.island && !world.patch.has(`${x},${y}`));
+        const opts = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => [a.tx + dx, a.ty + dy]).filter(([x, y]) => { const k = `${x},${y}`;
+          if (!world.walk[y * world.W + x] || world.bridgeSet.has(k) || occ.has(k) || world.patch.has(k)) return false;
+          if (a.region) return a.region.has(k);                                   // pen animals stay in their pen
+          return world.owner.get(k) === a.island && !world.plots.some((p) => x >= p.fence.x0 && x <= p.fence.x1 && y >= p.fence.y0 && y <= p.fence.y1) && !(world.pens || []).some((p) => x >= p.x0 && x <= p.x1 && y >= p.y0 && y <= p.y1) && !(world.terraces || []).some((t) => y >= t.y1 - 1 && y <= t.y1 + 2 && x >= t.x0 && x <= t.x1); });
         if (opts.length) { const [x, y] = opts[Math.floor(Math.random() * opts.length)]; occ.delete(`${a.tx},${a.ty}`); a.tx = x; a.ty = y; occ.add(`${x},${y}`); a.moving = true; } else a.wait = 2;
       }
     }
   });
   // fish jump every now and then
   L.nextFish -= dt;
-  if (L.nextFish <= 0 && world.waterCells.length) {
-    const cands = world.waterCells.filter((c) => c[2] >= 1 && c[2] <= 3);
-    const c = (cands.length ? cands : world.waterCells)[Math.floor(Math.random() * (cands.length || world.waterCells.length))];
-    const dir = Math.random() < 0.5 ? 1 : -1;
-    L.fish.push({ x: c[0] * 16 + 8, y: c[1] * 16 + 8, dir, t: 0, dur: rnd(0.8, 1.1), ic: Math.floor(Math.random() * 3), splashed: false });
-    L.ripples.push({ x: c[0] * 16 + 8, y: c[1] * 16 + 10, age: 0 });
+  if (L.nextFish <= 0 && world.fishSpots && world.fishSpots.length) {      // only from spots where the whole arc is open water
+    const c = world.fishSpots[Math.floor(Math.random() * world.fishSpots.length)];
+    L.fish.push({ x: c.x * 16 + 8, y: c.y * 16 + 8, dir: c.dir, t: 0, dur: rnd(0.8, 1.1), ic: Math.floor(Math.random() * 3), splashed: false });
+    L.ripples.push({ x: c.x * 16 + 8, y: c.y * 16 + 10, age: 0 });
     L.nextFish = rnd(5, 11);
-  }
+  } else if (L.nextFish <= 0) L.nextFish = 6;
   L.fish.forEach((f) => { f.t += dt; if (!f.splashed && f.t >= f.dur) { f.splashed = true; const ex = f.x + f.dir * 22; L.ripples.push({ x: ex, y: f.y + 2, age: 0 }); addParts(L, 'drop', ex, f.y, 5, { vy: -22, life: 0.6 }); } });
   L.fish = L.fish.filter((f) => f.t < f.dur + 0.05);
   L.ripples.forEach((r) => { r.age += dt; }); L.ripples = L.ripples.filter((r) => r.age < 1.1);

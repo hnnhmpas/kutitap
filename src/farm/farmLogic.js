@@ -52,6 +52,13 @@ export const SHAPES = {
   12: ['XXXX.', '.XXXX', 'XXXX.'],
 };
 
+// alternative layouts per planter count (the first one that fits a plot slot is used)
+export const SHAPE_OPTIONS = {
+  1: [['X']], 2: [['XX'], ['X', 'X']], 3: [['XX', 'X.'], ['XXX']], 4: [['XX', 'XX'], ['XXXX']], 5: [['XXX', '.XX'], ['XXX', 'XX.'], ['XXXXX']],
+  6: [['.XXX', 'XXX.'], ['XXX', 'XXX'], ['XX', 'XX', 'XX']], 7: [['XXXX', 'XXX.'], ['XXX', 'XXX', 'X..']], 8: [['XXX', 'XXX', '.XX'], ['XXXX', 'XXXX']],
+  9: [['XXX', 'XXX', 'XXX']], 10: [['XXXXX', 'XXXXX'], ['XXXX', 'XXXX', 'XX..']], 11: [['XXXX', 'XXXX', 'XXX.']], 12: [['XXXX.', '.XXXX', 'XXXX.'], ['XXXX', 'XXXX', 'XXXX']],
+};
+
 // 0 paid = seeds only (stage 0), otherwise 1..5 stretched over the goal duration
 export function stageFor(paid, total) {
   if (!total || paid <= 0) return 0;
