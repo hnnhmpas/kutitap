@@ -3,6 +3,9 @@
 // (time of day + the random rainy days). The lamp lights up at night.
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { FOOD_SETS } from './kutitapFoods';
+import HarvestBasket from './HarvestBasket';
+import { priceWindow } from './farm/farmLogic';
+import basketImg from './assets/farm/basket.png';
 import { PK, SHOP_MUSIC_ID } from './kutitapShopAssets';
 import { RainDrops, weatherLabel } from './kutitapWeather';
 import spStarCoin from './assets/shop/star-coin.png';
@@ -94,6 +97,24 @@ const Coin = ({ size = 14 }) => <img className="px-sprite" src={spStarCoin} alt=
 
 const readMuted = () => { try { return window.localStorage.getItem('kutitap_sfx') === 'off'; } catch (e) { return false; } };
 
+// Speech text: starts at the normal size and shrinks (down to 13px) until it fits inside the bubble.
+function FitText({ text }) {
+  const ref = useRef(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    const fit = () => {
+      let size = 26;
+      el.style.fontSize = `${size}px`;
+      while (size > 13 && el.scrollHeight > el.clientHeight + 1) { size -= 1; el.style.fontSize = `${size}px`; }
+    };
+    fit();
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
+    return undefined;
+  }, [text]);
+  return <span ref={ref} className="ss-bubble-text">{text}</span>;
+}
+
 function useFit(ref) {
   const [scale, setScale] = useState(1);
   useLayoutEffect(() => {
@@ -138,7 +159,7 @@ function SkyWindow({ tod, rain, onClick }) {
   );
 }
 
-export default function StarShop({ star, setStar, now, tod, rain, game, onClose }) {
+export default function StarShop({ star, setStar, farm, setFarm, now, tod, rain, game, onClose }) {
   const { cravingHint, tasteMonthKey, sfx } = game;
   const [tab, setTab] = useState(FOOD_SETS[0].id);
   const [bubble, setBubble] = useState(null); // { text, auto }
@@ -147,6 +168,7 @@ export default function StarShop({ star, setStar, now, tod, rain, game, onClose 
   const sprRef = useRef(null);
   const live = useRef({});
   const [justBought, setJustBought] = useState(null);
+  const [basketOpen, setBasketOpen] = useState(false);
   const [muted, setMuted] = useState(readMuted);
   const wrapRef = useRef(null);
   const scale = useFit(wrapRef);
@@ -162,12 +184,12 @@ export default function StarShop({ star, setStar, now, tod, rain, game, onClose 
     setPortrait({ row: 1 + Math.floor(Math.random() * 3), col: Math.floor(Math.random() * 5) });
     setBubble({ text, auto });
   };
-  live.current = { bubble, tod, rain, say };
+  live.current = { bubble, tod, rain, say, basketOpen, closeBasket: () => setBasketOpen(false) };
 
   useEffect(() => {
     say(`Welcome! Kutitap is craving something from the ${hint.craving.join(', ')}...`);
     sfx('open'); // cute opening sound
-    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    const onKey = (e) => { if (e.key !== 'Escape') return; if (live.current.basketOpen) live.current.closeBasket(); else onClose(); };
     const onMute = (e) => setMuted(!!(e.detail && e.detail.muted));
     window.addEventListener('keydown', onKey);
     window.addEventListener('kutitap-sfx-mute', onMute);
@@ -274,6 +296,37 @@ export default function StarShop({ star, setStar, now, tod, rain, game, onClose 
     setTimeout(() => setJustBought(null), 700);
     sfx('buy');
   };
+  // ---- Harvest basket: sell crops to Bun Bun ----
+  const basket = (farm && farm.basket) || {};
+  const basketTotal = Object.values(basket).reduce((a, n) => a + (n || 0), 0);
+  const nowMs = now.getTime();
+  const openBasket = () => {
+    setBasketOpen(true);
+    say(basketTotal > 0
+      ? 'Ooh, look at that harvest! My prices change through the day, so a crop might pay more later.'
+      : 'Your basket is empty! Harvest a finished plot on the farm and bring the crops to me.');
+    sfx('grab');
+  };
+  const sell = (crop, price) => {
+    if ((basket[crop.id] || 0) < 1) return;
+    const win = priceWindow(nowMs);
+    setFarm((prev) => {
+      const base = prev || {};
+      const b = { ...(base.basket || {}) };
+      if (!(b[crop.id] > 0)) return prev;
+      b[crop.id] -= 1;
+      if (b[crop.id] <= 0) delete b[crop.id];
+      const sd = { ...(base.sold || {}) };
+      const cur = sd[crop.id] && sd[crop.id].win === win ? sd[crop.id].n : 0;
+      sd[crop.id] = { win, n: cur + 1 };
+      return { ...base, basket: b, sold: sd };
+    });
+    setStar((prev) => ({ ...prev, coins: (prev.coins || 0) + price }));
+    say(price >= 27 ? `Wow, top price today! ${price} Star Coins for that ${crop.name}!`
+      : price <= 22 ? `A little low right now, but a deal is a deal. ${price} Star Coins for your ${crop.name}.`
+      : `Deal! ${price} Star Coins for one ${crop.name}. Thank you!`);
+    sfx('buy');
+  };
   const pickSet = (set) => {
     setTab(set.id);
     say(SET_SPEECH[set.name] || `${set.name}: fresh treats on the table!`);
@@ -292,7 +345,13 @@ export default function StarShop({ star, setStar, now, tod, rain, game, onClose 
         <div className={`ss-scene tod-room-${tod}`} style={{ width: SCENE_W, height: SCENE_H, transform: `scale(${scale})` }}>
           <div className="ss-wall" />
           <div className="ss-beam"><span className="ss-sign">★ STAR SNACK SHOP ★</span></div>
-          <span className="ss-coins" title="Star Coins"><Coin size={20} />{coins.toLocaleString()}</span>
+          <div className="ss-hud">
+            <button type="button" className="ss-basket-btn" onClick={openBasket} aria-label="Open the harvest basket" title="Harvest basket">
+              <img className="px-sprite" src={basketImg} alt="" />
+              {basketTotal > 0 && <b className="ss-owned">{basketTotal}</b>}
+            </button>
+            <span className="ss-coins" title="Star Coins"><Coin size={20} />{coins.toLocaleString()}</span>
+          </div>
           <button type="button" className="ss-leave" onClick={onClose} aria-label="Leave the shop">X</button>
           <div className="ss-floor" />
 
@@ -359,13 +418,15 @@ export default function StarShop({ star, setStar, now, tod, rain, game, onClose 
 
           <div className={`ss-light ${lightClass}`} aria-hidden="true" />
 
+          {basketOpen && <HarvestBasket basket={basket} sold={(farm && farm.sold) || {}} nowMs={nowMs} coins={coins} onSell={sell} onClose={() => setBasketOpen(false)} />}
+
           {/* dialogue box (Stardew-style): name tab, portrait, wide text, Okay */}
           {bubble && (
             <>
               <div className="ss-portrait" style={{ backgroundImage: `url(${shBunny})`, backgroundPosition: `-${portrait.col * 112}px -${portrait.row * 152}px` }} />
               <div className="ss-name" style={{ '--dlg': `url(${PK.dialogBox})` }}>Bun Bun</div>
               <div className="ss-bubble" role="status" style={{ '--dlg': `url(${PK.dialogBox})` }}>
-                <span className="ss-bubble-text">{bubble.text}</span>
+                <FitText text={bubble.text} />
                 <button type="button" className="ss-ok" onClick={() => setBubble(null)}>Okay <i /></button>
               </div>
             </>

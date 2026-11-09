@@ -2025,6 +2025,8 @@ export default function App() {
             <StarShop
               star={kStar}
               setStar={setKStar}
+              farm={farm}
+              setFarm={setFarm}
               now={kNow}
               tod={kTod}
               rain={kRain}

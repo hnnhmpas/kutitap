@@ -97,3 +97,19 @@ export function buildPlot(goal, farm) {
 export function plotsFromGoals(goals, farm) {
   return (goals || []).filter((g) => g && g.monthsList && g.monthsList.length && !(farm && farm.harvested && farm.harvested[g.id])).slice(0, MAX_PLOTS).map((g) => buildPlot(g, farm));
 }
+
+// ---- Bun Bun buys harvested crops: 20-30 Star Coins, prices drift every 2 hours ----
+export const SELL_MIN = 20;
+export const SELL_MAX = 30;
+export const PRICE_WINDOW_MS = 2 * 60 * 60 * 1000;
+export const priceWindow = (ms) => Math.floor(ms / PRICE_WINDOW_MS);
+const marketPrice = (cropId, win) => SELL_MIN + (hashStr(`bunbun|${cropId}|${win}`) % (SELL_MAX - SELL_MIN + 1));
+// sold = farm.sold { cropId: { win, n } }: every crop sold in the current window knocks 1 coin off its price (never below 20)
+export function bunBunPrice(cropId, ms, sold) {
+  const win = priceWindow(ms);
+  const s = sold && sold[cropId];
+  const drop = s && s.win === win ? s.n : 0;
+  const base = marketPrice(cropId, win);
+  const prev = marketPrice(cropId, win - 1);
+  return { price: Math.max(SELL_MIN, base - drop), trend: base > prev ? 'up' : base < prev ? 'down' : 'same' };
+}

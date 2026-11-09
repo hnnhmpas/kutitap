@@ -466,7 +466,7 @@ button[style*="var(--px-mint)"]::before { content: '★ '; color: #f5a400; text-
 /* dialogue box, Stardew style: big and wide, name tab, bunny portrait */
 .ss-bubble { left: 40px; bottom: 8px; width: 920px; height: 122px; padding: 22px 250px 22px 44px; z-index: 40; isolation: isolate; display: flex; align-items: center; font-family: 'SproutPx Big', 'Pixelify Sans', monospace; font-size: 26px; line-height: 1.25; letter-spacing: 0.3px; }
 .ss-bubble::before, .ss-name::before { content: ''; position: absolute; inset: 0; z-index: -1; border-style: solid; border-width: 30px; border-image: var(--dlg) 16 fill / 30px / 0 stretch; image-rendering: pixelated; filter: drop-shadow(3px 0 0 #7a4a2a) drop-shadow(-3px 0 0 #7a4a2a) drop-shadow(0 3px 0 #7a4a2a) drop-shadow(0 -3px 0 #7a4a2a); }
-.ss-bubble-text { display: block; }
+.ss-bubble-text { display: block; max-width: 600px; max-height: 78px; overflow: hidden; }
 .ss-name { left: 78px; bottom: 100px; z-index: 41; isolation: isolate; padding: 8px 34px 10px; font-family: 'SproutPx Big', 'Pixelify Sans', monospace; font-size: 26px; line-height: 1; }
 .ss-name::before { border-width: 18px; border-image-width: 18px; }
 .ss-portrait { right: 62px; bottom: 34px; width: 112px; height: 152px; background-size: 560px 608px; background-repeat: no-repeat; z-index: 42; image-rendering: pixelated; filter: drop-shadow(0 4px 0 rgba(74, 29, 54, 0.35)); }
@@ -504,3 +504,31 @@ button[style*="var(--px-mint)"]::before { content: '★ '; color: #f5a400; text-
 .fab-item.fab-open:hover { transform: translateY(-3px); transition-delay: 0s; }
 .fab-item.fab-open:active { transform: translateY(2px); transition-delay: 0s; }
 @media (prefers-reduced-motion: reduce) { .fab-item, .fab-item.fab-open, .fab-burger span { transition: none; } }
+
+
+/* ---------- Harvest basket (shop overlay) ---------- */
+.ss-hud { right: 48px; top: 3px; z-index: 6; display: flex; align-items: center; gap: 10px; }
+.ss-hud .ss-coins { position: static !important; }
+.ss-basket-btn { position: relative; width: 32px; height: 30px; background: #fff !important; box-shadow: 0 0 0 3px var(--ink) !important; display: grid; place-items: center; }
+.ss-basket-btn img { width: 24px; height: 24px; }
+.ss-basket-btn:hover { filter: brightness(1.06); transform: translateY(-1px); }
+.ss-basket-btn:active { transform: translateY(2px); }
+.hb-back { inset: 0; z-index: 32; background: rgba(74, 29, 54, 0.55); }
+.hb-box { position: absolute; left: 130px; top: 56px; width: 740px; height: 480px; box-sizing: border-box; padding: 16px 22px 12px; display: flex; flex-direction: column; gap: 10px; background: var(--px-card); box-shadow: 0 0 0 4px var(--ink), inset 0 0 0 4px var(--px-sun), 6px 8px 0 4px rgba(74, 29, 54, 0.35); }
+.hb-head { display: flex; align-items: center; gap: 10px; }
+.hb-head-ico { width: 32px; height: 32px; }
+.hb-title { flex: 1; font-family: 'SproutPx Big', 'Pixelify Sans', monospace; font-size: 28px; font-weight: 400; }
+.hb-coins { display: inline-flex; align-items: center; gap: 5px; background: #fff; padding: 2px 10px 2px 6px; box-shadow: 0 0 0 3px var(--ink); font-family: 'SproutPx Big', monospace; font-size: 16px; }
+.hb-x { width: 30px; height: 28px; background: var(--px-sun) !important; box-shadow: 0 0 0 3px var(--ink) !important; font-weight: 800; }
+.hb-grid { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 6px 8px 4px; display: grid; grid-template-columns: repeat(4, 1fr); grid-auto-rows: min-content; gap: 12px 10px; }
+.hb-card { background: #fff; box-shadow: 0 0 0 3px var(--ink); padding: 8px 6px 10px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.hb-spr { display: block; width: 64px; height: 64px; background-repeat: no-repeat; filter: drop-shadow(0 2px 0 rgba(74, 29, 54, 0.3)); }
+.hb-name { font-size: 15px; font-weight: 400; }
+.hb-qty { font-family: 'SproutPx Big', monospace; font-size: 15px; font-weight: 400; color: var(--px-accent); }
+.hb-trend { display: inline-block; margin-left: 4px; width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; }
+.hb-trend.up { border-bottom: 6px solid #2e9e5b; }
+.hb-trend.down { border-top: 6px solid #d6455d; }
+.hb-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; font-size: 20px; text-align: center; }
+.hb-empty img { width: 64px; height: 64px; opacity: 0.5; }
+.hb-sub { font-size: 14px; color: var(--px-muted); max-width: 420px; }
+.hb-foot { font-size: 13px; color: var(--px-muted); text-align: center; }
