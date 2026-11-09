@@ -34,14 +34,10 @@
 
 /* minimized: floating desktop badge */
 .cx-catcrop { display: block; background-repeat: no-repeat; image-rendering: pixelated; }
-.cx-badge { position: fixed; z-index: 9990; width: 84px; padding: 8px 0 8px; display: flex; flex-direction: column; align-items: center; gap: 6px; border: 0; cursor: pointer; background: #FF75B5; color: #1f4a2f; touch-action: none; user-select: none; box-shadow: 0 0 0 3px #1b0a14, inset 0 3px 0 #FFA8D3, inset 0 -4px 0 #E0619C, 5px 6px 0 3px rgba(74, 29, 54, 0.3); clip-path: polygon(0 6px, 6px 6px, 6px 0, calc(100% - 6px) 0, calc(100% - 6px) 6px, 100% 6px, 100% calc(100% - 6px), calc(100% - 6px) calc(100% - 6px), calc(100% - 6px) 100%, 6px 100%, 6px calc(100% - 6px), 0 calc(100% - 6px)); animation: cx-bob 1.4s steps(2) infinite; }
+.cx-badge { position: fixed; z-index: 9990; width: 84px; padding: 8px 0 8px; display: flex; flex-direction: column; align-items: center; gap: 6px; border: 0; cursor: pointer; background: transparent; color: #1f4a2f; touch-action: none; user-select: none; animation: cx-bob 1.4s steps(2) infinite; }
 .cx-badge-lcd { box-sizing: border-box; width: 70px; padding: 4px 4px; background: #C7E8CA; box-shadow: 0 0 0 2px #1b0a14; font: 8px/1 'Press Start 2P', monospace; text-align: right; overflow: hidden; }
 @keyframes cx-bob { 50% { transform: translateY(-3px); } }
 
-/* closed: floating "Reopen" pixel button */
-.cx-reopen { position: fixed; right: 96px; bottom: 18px; z-index: 9990; display: flex; align-items: center; gap: 8px; padding: 8px 14px 8px 10px; border: 0; cursor: pointer; background: #86EFAC; color: #14532d; font: 10px/1 'Press Start 2P', monospace; box-shadow: 0 0 0 3px #1b0a14, inset 0 3px 0 #bff7d2, inset 0 -4px 0 #4ADE80, 5px 6px 0 3px rgba(74, 29, 54, 0.3); clip-path: polygon(0 6px, 6px 6px, 6px 0, calc(100% - 6px) 0, calc(100% - 6px) 6px, 100% 6px, 100% calc(100% - 6px), calc(100% - 6px) calc(100% - 6px), calc(100% - 6px) 100%, 6px 100%, 6px calc(100% - 6px), 0 calc(100% - 6px)); }
-.cx-reopen:hover { filter: brightness(1.06); }
-.cx-reopen:active { transform: translateY(1.5px); }
 @media (prefers-reduced-motion: reduce) { .cx-badge { animation: none; } }
 
 /* smooth open / close (grows out of the calculator icon) */

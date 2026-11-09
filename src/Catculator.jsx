@@ -180,13 +180,7 @@ export default function Catculator({ mode, setMode, history, setHistory }) {
   });
 
   if (phase === 'gone') {
-    if (mode === 'closed') {
-      return (
-        <button type="button" className="cx-reopen" onClick={() => setMode('open')} aria-label="Reopen Catculator">
-          <CatCrop w={30} /><span>REOPEN</span>
-        </button>
-      );
-    }
+    if (mode === 'closed') return null; // closed: nothing on screen, reopen from the calculator button
     if (mode === 'min') return <Badge value={main} onRestore={() => setMode('open')} />;
     return null;
   }
