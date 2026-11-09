@@ -1,4 +1,4 @@
-// Star Snack Shop room (in-page, under the global top bar).
+// Star Snack Shop room (in-page).
 // Cabinets = pick a prize set, table = what you buy. The window shows Kutitap's sky OUTSIDE the glass
 // (time of day + the random rainy days). The lamp lights up at night.
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';

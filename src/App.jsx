@@ -11,8 +11,6 @@ import {
   Plus,
   Trash2,
   LogOut,
-  TrendingUp,
-  TrendingDown,
   ShieldCheck,
   Sparkles,
   Clock,
@@ -44,14 +42,6 @@ import spBunny from './assets/pixel/bunny.png';
 import spTama from './assets/pixel/tama.png';
 
 // Claw machine prizes (strawberry dessert sheet)
-import dsStrawberry from './assets/pixel/dessert-strawberry.png';
-import dsCupcake from './assets/pixel/dessert-cupcake.png';
-import dsDonut from './assets/pixel/dessert-donut.png';
-import dsCakeSlice from './assets/pixel/dessert-cakeslice.png';
-import dsMacaron from './assets/pixel/dessert-macaron.png';
-import dsTart from './assets/pixel/dessert-tart.png';
-import dsShortcake from './assets/pixel/dessert-shortcake.png';
-import dsRollCake from './assets/pixel/dessert-rollcake.png';
 
 // Bill Buddy cat + meadow scenery
 import catHappy from './assets/pixel/cat-happy.png';
@@ -215,7 +205,7 @@ function useFirebaseSync(key, initialValue) {
 }
 
 // 8-bit blips + pixel sparkles on every press. Purely cosmetic; has its own mute toggle.
-function PixelFX() {
+function PixelFX({ menuOpen = true }) {
   const [muted, setMuted] = useState(() => {
     try { return window.localStorage.getItem('kutitap_sfx') === 'off'; } catch (e) { return false; }
   });
@@ -340,7 +330,9 @@ function PixelFX() {
   return (
     <button
       type="button"
-      className="px-sfx"
+      className={`px-sfx fab-item${menuOpen ? ' fab-open' : ''}`}
+      style={{ '--i': 0 }}
+      tabIndex={menuOpen ? 0 : -1}
       aria-label={muted ? 'Turn sound on' : 'Turn sound off'}
       title={muted ? 'Sound off' : 'Sound on'}
       onClick={() => {
@@ -375,14 +367,18 @@ function PixelMeter({ pct, tone = 'pink', segments = 12 }) {
 // ---------------------------------------------------------------------------
 const STAR_DEFAULT = { coins: 0, pantry: {}, tried: {}, caught: {}, day: '', roundsUsed: 0, bonusRounds: 0, carry: 0, bonusAwarded: {}, baselineDone: false };
 const DAILY_ROUNDS = 5;
+const MAX_ROUNDS = 20; // most rounds that can be available at once (today's daily rounds + bonus rounds)
 const TRIES_PER_ROUND = 5;
 const RARE_COINS = 5;
-// 5 prizes = 5 coins, 4 = 4, 2-3 = 3, 1 = 2, none = 0. A rare catch adds +5 on top.
-const roundReward = (wins, rareCaught) => (wins >= 5 ? 5 : wins === 4 ? 4 : wins >= 2 ? 3 : wins === 1 ? 2 : 0) + (rareCaught ? RARE_COINS : 0);
+// 5 prizes = 3 coins, 3-4 = 2, 1-2 = 1, none = 0. A rare catch pays +5 instantly (see the catch handler) on top of this.
+const roundReward = (wins) => (wins >= 5 ? 3 : wins >= 3 ? 2 : wins >= 1 ? 1 : 0);
+// daily rounds do not carry over: each day starts with DAILY_ROUNDS; only bonus rounds are kept, capped so daily + bonus <= MAX_ROUNDS
+const dailyLeftOf = (star, today) => Math.max(0, DAILY_ROUNDS - (star.day === today ? star.roundsUsed || 0 : 0));
+const roundsAvailable = (star, today) => Math.min(MAX_ROUNDS, dailyLeftOf(star, today) + (star.bonusRounds || 0));
+const cappedBonus = (bonus, dailyLeft) => Math.max(0, Math.min(bonus, MAX_ROUNDS - dailyLeft));
 // Collect 5 of every food in a collection (prize set) = +10 coins, then that collection's counts reset to 0.
 const COLLECTION_GOAL = 5;
 const COLLECTION_BONUS = 10;
-const dayDiff = (a, b) => Math.round((new Date(`${b}T00:00:00`) - new Date(`${a}T00:00:00`)) / 86400000);
 
 const hashStr = (s) => {
   let h = 2166136261;
@@ -394,11 +390,40 @@ const tasteMonthKey = (d = new Date()) => localDay(d).slice(0, 7);
 
 // Every month Kutitap loves 2 foods, hates 2 and is fine with the rest. The picks come from the month itself,
 // so they are the same on every device and nothing extra has to be saved.
+// From TASTE_V2_START on: the 2 loved foods come from 2 different collections, the 2 hated foods from 2 other different
+// collections (4 collections in all), none of those collections was used the month before, and a food that was loved or
+// hated in the previous 12 months is never picked again. Earlier months keep the old picks (their saved results stay as they were).
+const TASTE_V2_START = '2026-11';
+const shiftMonth = (monthKey, delta) => {
+  const [y, m] = monthKey.split('-').map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+};
 const tasteCache = {};
 const tasteMap = (monthKey) => {
   if (!tasteCache[monthKey]) {
-    const ranked = ALL_FOODS.map((f) => ({ id: f.id, score: hashStr(`${monthKey}|${f.id}`) })).sort((a, b) => a.score - b.score);
-    tasteCache[monthKey] = { loved: ranked.slice(0, 2).map((r) => r.id), hated: ranked.slice(2, 4).map((r) => r.id) };
+    if (monthKey < TASTE_V2_START) {
+      const ranked = ALL_FOODS.map((f) => ({ id: f.id, score: hashStr(`${monthKey}|${f.id}`) })).sort((a, b) => a.score - b.score);
+      tasteCache[monthKey] = { loved: ranked.slice(0, 2).map((r) => r.id), hated: ranked.slice(2, 4).map((r) => r.id) };
+    } else {
+      const prev = monthKey > TASTE_V2_START ? tasteMap(shiftMonth(monthKey, -1)) : null;
+      const prevSets = new Set(prev ? [...prev.loved, ...prev.hated].map((id) => FOOD_BY_ID[id].setId) : []);
+      const recentFoods = new Set();
+      for (let i = 1; i <= 12 && shiftMonth(monthKey, -i) >= TASTE_V2_START; i++) {
+        const t = tasteMap(shiftMonth(monthKey, -i));
+        t.loved.concat(t.hated).forEach((id) => recentFoods.add(id));
+      }
+      let sets = FOOD_SETS.filter((st) => !prevSets.has(st.id));
+      if (sets.length < 4) sets = FOOD_SETS;
+      const pickedSets = sets.map((st) => ({ st, score: hashStr(`${monthKey}|set|${st.id}`) })).sort((a, b) => a.score - b.score).slice(0, 4).map((r) => r.st);
+      const pickFood = (st) => {
+        let pool = st.foods.filter((f) => !recentFoods.has(f.id));
+        if (pool.length === 0) pool = st.foods;
+        return pool.map((f) => ({ id: f.id, score: hashStr(`${monthKey}|food|${f.id}`) })).sort((a, b) => a.score - b.score)[0].id;
+      };
+      const ids = pickedSets.map(pickFood);
+      tasteCache[monthKey] = { loved: ids.slice(0, 2), hated: ids.slice(2, 4) };
+    }
   }
   return tasteCache[monthKey];
 };
@@ -406,14 +431,12 @@ const tasteOf = (monthKey, id) => {
   const t = tasteMap(monthKey);
   return t.loved.includes(id) ? 'love' : t.hated.includes(id) ? 'hate' : 'ok';
 };
-// A gentle hint: which shelves hide the loved foods (plus one decoy) and which ones to be careful with.
+// A gentle hint: which shelves hide the loved foods and which ones to be careful with.
 const cravingHint = (monthKey) => {
   const t = tasteMap(monthKey);
   const lovedSets = [...new Set(t.loved.map((id) => FOOD_BY_ID[id].setName))];
   const hatedSets = [...new Set(t.hated.map((id) => FOOD_BY_ID[id].setName))];
-  let i = hashStr(`${monthKey}|decoy`) % FOOD_SETS.length;
-  while (lovedSets.includes(FOOD_SETS[i].name)) i = (i + 1) % FOOD_SETS.length;
-  const craving = [...lovedSets, FOOD_SETS[i].name].sort((a, b) => hashStr(`${monthKey}${a}`) - hashStr(`${monthKey}${b}`));
+  const craving = [...lovedSets].sort((a, b) => hashStr(`${monthKey}${a}`) - hashStr(`${monthKey}${b}`));
   return { craving, hatedSets };
 };
 const todOf = (d) => {
@@ -466,10 +489,9 @@ function KutitapPanel({ unpaid, total, now, star, setStar, onOpenShop }) {
     if (!food || reaction) return;
     const taste = tasteOf(monthKey, id);
     const today = localDay(now);
-    // liked food: +1 bonus round. hated food: -1 round (bonus first, then carried, then today's). alright: no change.
-    const usedNow = star.day === today ? star.roundsUsed || 0 : 0;
-    const roundsLeftNow = (star.carry || 0) + Math.max(0, DAILY_ROUNDS - usedNow) + (star.bonusRounds || 0);
-    const roundDelta = taste === 'love' ? 1 : taste === 'hate' && roundsLeftNow > 0 ? -1 : 0;
+    // liked food: +1 bonus round (within the 20-round cap). hated food: -1 round (bonus first, then today's). alright: no change.
+    const roundsLeftNow = roundsAvailable(star, today);
+    const roundDelta = taste === 'love' ? (roundsLeftNow < MAX_ROUNDS ? 1 : 0) : taste === 'hate' && roundsLeftNow > 0 ? -1 : 0;
     setStar((prev) => {
       const have = (prev.pantry || {})[id] || 0;
       if (have <= 0) return prev;
@@ -478,10 +500,9 @@ function KutitapPanel({ unpaid, total, now, star, setStar, onOpenShop }) {
       const tried = { ...(prev.tried || {}) };
       tried[monthKey] = { ...(tried[monthKey] || {}), [id]: taste };
       const next = { ...prev, pantry, tried };
-      if (taste === 'love') next.bonusRounds = (prev.bonusRounds || 0) + 1;
+      if (taste === 'love') next.bonusRounds = cappedBonus((prev.bonusRounds || 0) + 1, dailyLeftOf(prev, today));
       if (taste === 'hate') {
         if ((prev.bonusRounds || 0) > 0) next.bonusRounds = prev.bonusRounds - 1;
-        else if ((prev.carry || 0) > 0) next.carry = prev.carry - 1;
         else {
           const used = prev.day === today ? prev.roundsUsed || 0 : 0;
           if (used < DAILY_ROUNDS) { next.day = today; next.roundsUsed = used + 1; }
@@ -499,7 +520,7 @@ function KutitapPanel({ unpaid, total, now, star, setStar, onOpenShop }) {
   const pantry = Object.entries(star.pantry || {}).filter(([id, n]) => n > 0 && FOOD_BY_ID[id]);
 
   const message = reaction
-    ? reaction.taste === 'love' ? `♪ Yummy! ${reaction.food.name} is my favorite this month! +1 claw round! ♪`
+    ? reaction.taste === 'love' ? `♪ Yummy! ${reaction.food.name} is my favorite this month!${reaction.roundDelta > 0 ? ' +1 claw round!' : ` Rounds are full (${MAX_ROUNDS}).`} ♪`
       : reaction.taste === 'hate' ? `Ew... I do NOT like ${reaction.food.name}!${reaction.roundDelta < 0 ? ' -1 claw round...' : ''}`
       : `Nom nom... ${reaction.food.name} is alright.`
     : {
@@ -709,15 +730,14 @@ function ClawMachine({ star, setStar, starLoaded, roundsLeft }) {
   const finishRound = () => {
     const w = winsRef.current;
     const rare = rareRef.current;
-    const coins = roundReward(w, rare);
-    setReward({ wins: w, rare, coins });
+    const coins = roundReward(w);               // paid now; the rare's +5 was already paid when it was caught
+    setReward({ wins: w, rare, coins: coins + (rare ? RARE_COINS : 0) });
     setStar((prev) => {
       const today = localDay();
       let used = prev.day === today ? prev.roundsUsed || 0 : 0;
-      let carry = prev.carry || 0;
       let bonus = prev.bonusRounds || 0;
-      if (used < DAILY_ROUNDS) used += 1; else if (carry > 0) carry -= 1; else bonus = Math.max(0, bonus - 1);
-      return { ...prev, day: today, roundsUsed: used, carry, bonusRounds: bonus, coins: (prev.coins || 0) + coins };
+      if (used < DAILY_ROUNDS) used += 1; else bonus = Math.max(0, bonus - 1);
+      return { ...prev, day: today, roundsUsed: used, bonusRounds: bonus, coins: (prev.coins || 0) + coins };
     });
     sfx(rare ? 'rare' : coins > 0 ? 'coin' : 'miss');
   };
@@ -828,9 +848,10 @@ function ClawMachine({ star, setStar, starLoaded, roundsLeft }) {
           collSet.foods.forEach((f) => { c[f.id] = 0; });
           coinsNow += COLLECTION_BONUS;
         }
+        if (food.rare) coinsNow += RARE_COINS;   // rare = instant, guaranteed +5
         return { ...prev, caught: c, coins: coinsNow };
       });
-      setMsg(complete ? `COLLECTION COMPLETE! ${collSet.name} +${COLLECTION_BONUS} coins!` : food.rare ? `RARE CATCH! ${food.name}!` : `You caught a ${food.name}!`);
+      setMsg(complete ? `COLLECTION COMPLETE! ${collSet.name} +${COLLECTION_BONUS} coins!` : food.rare ? `RARE CATCH! ${food.name}! +${RARE_COINS} coins!` : `You caught a ${food.name}!`);
       setFlash(complete ? `+${COLLECTION_BONUS} coins!` : food.rare ? `RARE! ${food.name}` : food.name);
       sfx('win');
       setTimeout(() => setFlash(null), 1700);
@@ -929,7 +950,7 @@ function ClawMachine({ star, setStar, starLoaded, roundsLeft }) {
                 <div className="claw-end-title">{reward.rare ? 'RARE CATCH!' : prizes.length === 0 ? 'Machine cleared!' : 'Round over!'}</div>
                 <div className="claw-end-sub">{reward.wins === 0 ? 'No prizes this round.' : `${reward.wins} prize${reward.wins > 1 ? 's' : ''} caught`}</div>
                 <div className="claw-reward"><StarCoin size={32} /><span>{reward.coins > 0 ? `+${reward.coins} Star Coin${reward.coins > 1 ? 's' : ''}` : '+0 Star Coins'}</span></div>
-                {reward.rare && <div className="claw-small">Rare food = flat {RARE_COINS} coins for the round</div>}
+                {reward.rare && <div className="claw-small">Rare food = +{RARE_COINS} coins (paid instantly)</div>}
                 {roundsLeft > 0 ? (
                   <button onClick={startNextRound} style={{ backgroundColor: 'var(--px-pink)', color: '#FFFFFF', borderRadius: 0, '--px': 'pill', padding: '10px 18px', fontWeight: 800, fontSize: '13px', marginTop: '12px' }}>Next round ({roundsLeft} left)</button>
                 ) : (
@@ -962,7 +983,7 @@ function ClawMachine({ star, setStar, starLoaded, roundsLeft }) {
         </button>
       </div>
       <div className="claw-hint">Click the machine, then use ← → and Space</div>
-      <div className="claw-rules">5 prizes = 3 · 3-4 = 2 · 1-2 = 1 · rare food = {RARE_COINS} Star Coins</div>
+      <div className="claw-rules">5 prizes = 3 · 3-4 = 2 · 1-2 = 1 · rare food = +{RARE_COINS} Star Coins</div>
 
       <div className="claw-collection-wrap">
         <div className="claw-coll-label">Prize shadows · {set.foods.filter((f) => caught[f.id] > 0).length}/{set.foods.length} · 5 of each = +10</div>
@@ -1815,6 +1836,7 @@ export default function App() {
   const [kStar, setKStar, kStarLoaded] = useFirebaseSync('kutitap_star', STAR_DEFAULT);
   const [farm, setFarm] = useFirebaseSync('kutitap_farm', FARM_DEFAULT);
   const [isShopOpen, setIsShopOpen] = useState(false);
+  const [fabMenuOpen, setFabMenuOpen] = useState(false); // bottom-right mini menu (sound, shop, Catculator)
   const [calcMode, setCalcMode] = useState('closed'); // closed | min | open
   const [calcHistory, setCalcHistory] = useFirebaseSync('kutitap_calc_history', []);
   const kNow = useNow(60000);
@@ -1822,7 +1844,7 @@ export default function App() {
   const kRain = isRainyDay(kNow);
   const kToday = localDay(kNow);
   const kDataReady = useDataReady(['kutitap_star', 'kutitap_utilities', 'kutitap_savings', 'kutitap_expenses', 'kutitap_loans']);
-  const kRoundsLeft = (kStar.carry || 0) + Math.max(0, DAILY_ROUNDS - (kStar.day === kToday ? kStar.roundsUsed || 0 : 0)) + (kStar.bonusRounds || 0);
+  const kRoundsLeft = roundsAvailable(kStar, kToday);
   // the shop is a room under the top bar; leaving it when you switch tabs
   useEffect(() => { setIsShopOpen(false); }, [activeTab]);
 
@@ -1835,19 +1857,26 @@ export default function App() {
   const kPaidSig = kPaidKeys.join('\n');
 
   useEffect(() => {
-    if (!kStarLoaded || kStar.day === kToday) return;
-    // a new day: unused rounds from earlier days (including days the app was not opened) carry over
+    if (!kStarLoaded || (kStar.day === kToday && !kStar.carry)) return;
+    // a new day: the 5 daily rounds start fresh (unused ones do not carry over); bonus rounds stay, capped at 20 with the daily 5.
+    // the old `carry` field is kept in the saved data but is no longer used (set to 0).
     setKStar((prev) => {
-      if (prev.day === kToday) return prev;
-      let carry = prev.carry || 0;
-      if (prev.day) {
-        carry += Math.max(0, DAILY_ROUNDS - (prev.roundsUsed || 0));
-        const gap = dayDiff(prev.day, kToday);
-        if (gap > 1) carry += DAILY_ROUNDS * (gap - 1);
-      }
-      return { ...prev, day: kToday, roundsUsed: 0, carry };
+      if (prev.day === kToday && !prev.carry) return prev;
+      const isNewDay = prev.day !== kToday;
+      return { ...prev, day: kToday, roundsUsed: isNewDay ? 0 : prev.roundsUsed || 0, carry: 0, bonusRounds: cappedBonus(prev.bonusRounds || 0, isNewDay ? DAILY_ROUNDS : dailyLeftOf(prev, kToday)) };
     });
-  }, [kStarLoaded, kToday, kStar.day]);
+  }, [kStarLoaded, kToday, kStar.day, kStar.carry]);
+
+  // one-time: November 2026 got new tastes (loved/hated/okay), so its "already tried" labels start fresh. Everything else saved stays.
+  useEffect(() => {
+    if (!kStarLoaded || kStar.tasteV === 2) return;
+    setKStar((prev) => {
+      if (prev.tasteV === 2) return prev;
+      const tried = { ...(prev.tried || {}) };
+      delete tried['2026-11'];
+      return { ...prev, tried, tasteV: 2 };
+    });
+  }, [kStarLoaded, kStar.tasteV]);
 
   useEffect(() => {
     if (!kDataReady) return;
@@ -1858,18 +1887,22 @@ export default function App() {
       const nextAwarded = { ...awarded };
       fresh.forEach((k) => { nextAwarded[k] = 1; });
       // the first run only records bills that were already paid, so old bills never count as new
-      return { ...prev, baselineDone: true, bonusAwarded: nextAwarded, bonusRounds: (prev.bonusRounds || 0) + (prev.baselineDone ? fresh.length : 0) };
+      const dailyLeft = dailyLeftOf(prev, kToday);
+      return { ...prev, baselineDone: true, bonusAwarded: nextAwarded, bonusRounds: cappedBonus((prev.bonusRounds || 0) + (prev.baselineDone ? fresh.length : 0), dailyLeft) };
     });
   }, [kDataReady, kPaidSig]);
 
   return (
     <>
       <script src="https://cdn.tailwindcss.com"></script>
-      <PixelFX />
-      <button type="button" className={`shop-fab${isShopOpen ? ' open' : ''}`} onClick={() => setIsShopOpen((v) => !v)} aria-label="Star Snack Shop" aria-pressed={isShopOpen}>
+      <PixelFX menuOpen={fabMenuOpen} />
+      <button type="button" className={`fab-burger${fabMenuOpen ? ' open' : ''}`} onClick={() => setFabMenuOpen((v) => !v)} aria-label={fabMenuOpen ? 'Close menu' : 'Open menu'} aria-expanded={fabMenuOpen} title="Menu">
+        <span /><span /><span />
+      </button>
+      <button type="button" style={{ '--i': 1 }} tabIndex={fabMenuOpen ? 0 : -1} className={`shop-fab fab-item${fabMenuOpen ? ' fab-open' : ''}${isShopOpen ? ' open' : ''}`} onClick={() => setIsShopOpen((v) => !v)} aria-label="Star Snack Shop" aria-pressed={isShopOpen}>
         <img className="px-sprite" src={shopIcon} alt="" />
       </button>
-      <button type="button" className={`calc-fab${calcMode === 'open' ? ' open' : ''}`} onClick={() => setCalcMode((m) => (m === 'open' ? 'min' : 'open'))} aria-label="Catculator" title="Catculator" aria-pressed={calcMode === 'open'}>
+      <button type="button" style={{ '--i': 2 }} tabIndex={fabMenuOpen ? 0 : -1} className={`calc-fab fab-item${fabMenuOpen ? ' fab-open' : ''}${calcMode === 'open' ? ' open' : ''}`} onClick={() => setCalcMode((m) => (m === 'open' ? 'min' : 'open'))} aria-label="Catculator" title="Catculator" aria-pressed={calcMode === 'open'}>
         <img className="px-sprite" src={calcIcon} alt="" />
       </button>
       <Catculator mode={calcMode} setMode={setCalcMode} history={calcHistory} setHistory={setCalcHistory} />
@@ -2213,8 +2246,14 @@ export default function App() {
                   padding-bottom: 16px;
                   box-sizing: border-box;
                 }
+                /* Obligations + Expenses panels keep a fixed height (set by the left column); long lists scroll inside */
+                .planner-fixed-panel { min-height: 420px; box-sizing: border-box; }
+                @media (min-width: 1101px) {
+                  .planner-fixed-panel { contain: size; }
+                }
                 @media (max-width: 1100px) {
                   .planner-grid-fullscreen { grid-template-columns: 1fr; }
+                  .planner-fixed-panel { max-height: 560px; }
                 }
               `}</style>
 
@@ -2291,7 +2330,7 @@ export default function App() {
                   />
                 </div>
 
-                <div style={{ backgroundColor: 'var(--px-card)', borderRadius: 0, '--px': 'panel', padding: '20px', width: '100%', display: 'flex', flexDirection: 'column', height: '100%', boxShadow: '0 8px 25px rgba(223,177,91,0.15)' }}>
+                <div className="planner-fixed-panel" style={{ backgroundColor: 'var(--px-card)', borderRadius: 0, '--px': 'panel', padding: '20px', width: '100%', display: 'flex', flexDirection: 'column', height: '100%', boxShadow: '0 8px 25px rgba(223,177,91,0.15)' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
                     <div style={{ marginBottom: '12px', borderBottom: '2px dashed var(--px-sun)', paddingBottom: '8px', flexShrink: 0 }}>
                       <span style={{ fontSize: '15px', fontWeight: 800, color: 'var(--px-accent)', textTransform: 'uppercase' }}>Monthly Obligations</span>
@@ -2373,7 +2412,7 @@ export default function App() {
                   </div>
                 </div>
 
-                <div style={{ backgroundColor: 'var(--px-card)', borderRadius: 0, '--px': 'panel', padding: '20px', width: '100%', display: 'flex', flexDirection: 'column', height: '100%', boxShadow: '0 8px 25px rgba(223,177,91,0.15)' }}>
+                <div className="planner-fixed-panel" style={{ backgroundColor: 'var(--px-card)', borderRadius: 0, '--px': 'panel', padding: '20px', width: '100%', display: 'flex', flexDirection: 'column', height: '100%', boxShadow: '0 8px 25px rgba(223,177,91,0.15)' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', borderBottom: '2px dashed var(--px-sun)', paddingBottom: '8px', flexShrink: 0 }}>
                       <span style={{ fontSize: '15px', fontWeight: 800, color: 'var(--px-accent)', textTransform: 'uppercase' }}>Monthly Expenses</span>
