@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { buildInvoiceHtml } from './invoiceTemplate';
 import {
   LayoutDashboard,
   Receipt,
@@ -1707,46 +1708,13 @@ export default function App() {
     const payForHoursWorked = totalInvoiceHours * 7.50;
     const formattedPay = `$${payForHoursWorked.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <title>Hannah Mae Pascaran - ${attMonthName}, ${attYear} Invoice</title>
-        <style>
-          body { font-family: Arial, sans-serif; color: #000; margin: 30px; font-size: 11px; line-height: 1.3; }
-          h2 { text-align: center; font-size: 16px; font-weight: bold; margin-bottom: 20px; }
-          .section-header { font-weight: bold; background-color: #f2f2f2; padding: 4px 6px; margin-top: 10px; margin-bottom: 5px; border-top: 1px solid #ccc; border-bottom: 1px solid #ccc; }
-          table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
-          td, th { border: 1px solid #d3d3d3; padding: 6px 8px; vertical-align: top; }
-          th { background-color: #f9f9f9; font-weight: bold; text-align: left; }
-          .right { text-align: right; }
-          .notes { font-size: 10px; color: #333; margin-top: 15px; }
-        </style>
-      </head>
-      <body>
-        <h2>INDEPENDENT CONTRACTOR INVOICE</h2>
-        <table><tr><td style="width: 30%;"><strong>INVOICE TO:</strong></td><td>Boostability</td></tr><tr><td><strong>INVOICE DATE:</strong></td><td>${attMonthName}-${attYear}</td></tr></table>
-        <div class="section-header">CONTRACTOR INFORMATION</div>
-        <table><tr><td style="width: 30%;"><strong>NAME:</strong></td><td>Hannah Mae Pascaran</td></tr><tr><td><strong>PHONE NUMBER:</strong></td><td>09950281082</td></tr><tr><td><strong>EMAIL:</strong></td><td>hannahmae.pascaran@gmail.com</td></tr><tr><td><strong>ADDRESS:</strong></td><td>Block 14 Lot 15 Daphne Road Molino Parkhomes Queen's Row West Bacoor City 4102, Cavite Philippines</td></tr></table>
-        <div class="section-header">PAYMENT INFORMATION</div>
-        <table><tr><td style="width: 30%;"><strong>HOURLY RATE ($USD):</strong></td><td>$7.50</td></tr><tr><td><strong>BANK NAME:</strong></td><td>GoTyme Bank</td></tr><tr><td><strong>ACCOUNT NAME:</strong></td><td>Hannah Mae Pascaran</td></tr><tr><td><strong>ACCOUNT NUMBER:</strong></td><td>010680295154</td></tr><tr><td><strong>SWIFT NUMBER:</strong></td><td>GOTYPHM2XXX</td></tr><tr><td><strong>ADDRESS ASSOCIATED WITH ACCOUNT:</strong></td><td>21st Floor Giga Tower, Bridgetowne, C5 Road, Brgy Ugong Norte, E. Rodriguez Jr. Ave 1110 Quezon City, Philippines</td></tr></table>
-        <div class="section-header">WORK PERFORMED</div>
-        <table>
-          <thead><tr><th style="width: 35%;">WORK PERFORMED</th><th style="width: 45%;">DATES WORKED</th><th class="right" style="width: 20%;">NUMBER OF HOURS WORKED</th></tr></thead>
-          <tbody>
-            ${formattedWeeks.map(w => `<tr><td>${w.workPerformed}</td><td>${w.datesWorked}</td><td class="right">${w.hours}</td></tr>`).join('')}
-            <tr><td><strong>TOTAL HOURS</strong></td><td></td><td class="right"><strong>${totalInvoiceHours}</strong></td></tr>
-            <tr><td><strong>PAY FOR HOURS WORKED</strong></td><td></td><td class="right"><strong>${formattedPay}</strong></td></tr>
-            <tr><td><strong>OTHER AMOUNT</strong><br><span style="font-size:9px; color:#555;">Reason for Other Amount</span></td><td></td><td class="right"><strong>$0.00</strong></td></tr>
-            <tr><td><strong>TOTAL PAYMENT OWED</strong></td><td></td><td class="right"><strong>${formattedPay}</strong></td></tr>
-          </tbody>
-        </table>
-        <div class="notes"><p><strong>Payment Schedule:</strong><br>Your payment will be processed by the 5th business day of each month.</p></div>
-        <script>window.onload = function() { window.print(); };</script>
-      </body>
-      </html>
-    `;
+    const htmlContent = buildInvoiceHtml({
+      monthName: attMonthName,
+      year: attYear,
+      weeks: formattedWeeks,
+      totalHours: totalInvoiceHours,
+      payText: formattedPay,
+    });
 
     const printWindow = window.open('', '_blank');
     if (printWindow) {
