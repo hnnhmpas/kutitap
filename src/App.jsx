@@ -1549,6 +1549,11 @@ export default function App() {
   const [attYear, setAttYear] = useState(() => new Date().getFullYear());
   const [attendanceRecords, setAttendanceRecords] = useFirebaseSync('kutitap_attendance', {});
   const [isSwipingID, setIsSwipingID] = useState(false);
+  // DST on: shift 10 PM - 7 AM. DST off: shift 11 PM - 8 AM (one hour later).
+  const [dstOn, setDstOn] = useFirebaseSync('kutitap_attendance_dst', true);
+  const shiftStartHour = dstOn ? 22 : 23;
+  const shiftEndHour = dstOn ? 7 : 8;
+  const shiftLabel = dstOn ? '10 PM – 7 AM' : '11 PM – 8 AM';
 
   const attMonthName = months[attMonthIndex];
   const maxAttYears = Array.from({ length: 11 }, (_, i) => 2026 + i);
@@ -1597,8 +1602,11 @@ export default function App() {
     const minutes = timeDate.getMinutes();
     const totalMinutes = hours * 60 + minutes;
 
-    if (totalMinutes > 7 * 60 && totalMinutes <= 21 * 60) return 'Out of Shift';
-    else if (totalMinutes > 21 * 60 && totalMinutes <= 22 * 60) return 'Present';
+    const startMin = shiftStartHour * 60;
+    const endMin = shiftEndHour * 60;
+
+    if (totalMinutes > endMin && totalMinutes <= startMin - 60) return 'Out of Shift';
+    else if (totalMinutes > startMin - 60 && totalMinutes <= startMin) return 'Present';
     else return 'Late';
   };
 
@@ -1607,7 +1615,7 @@ export default function App() {
     const currentHour = today.getHours();
     
     let targetDate = new Date(today);
-    if (currentHour >= 0 && currentHour <= 7) {
+    if (currentHour >= 0 && currentHour <= shiftEndHour) {
       targetDate.setDate(targetDate.getDate() - 1);
     }
 
@@ -2950,6 +2958,18 @@ export default function App() {
                     <button onClick={handleTimeInToday} style={{ backgroundColor: 'var(--px-pink)', color: '#FFFFFF', borderRadius: 0, '--px': 'pill', padding: '16px 24px', fontWeight: 800, fontSize: '16px', cursor: 'pointer', boxShadow: '0 6px 20px rgba(223,177,91,0.35)', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
                       <Sparkles style={{ width: '20px', height: '20px' }} /> Time In For Today!
                     </button>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', flexWrap: 'wrap', marginTop: '12px' }}>
+                    <span style={{ fontSize: '12px', fontWeight: 800, color: 'var(--px-accent)' }}>DST</span>
+                    <button
+                      onClick={() => setDstOn(!dstOn)}
+                      aria-pressed={dstOn}
+                      title="Switch between the DST (10 PM – 7 AM) and non-DST (11 PM – 8 AM) shift"
+                      style={{ backgroundColor: dstOn ? 'var(--px-green-d)' : 'var(--px-butter)', color: dstOn ? '#FFFFFF' : 'var(--px-accent)', borderRadius: 0, '--px': 'pill', padding: '6px 16px', fontWeight: 800, fontSize: '12px', cursor: 'pointer' }}
+                    >
+                      {dstOn ? 'ON' : 'OFF'}
+                    </button>
+                    <span style={{ fontSize: '12px', fontWeight: 800, color: 'var(--ink)' }}>Shift: {shiftLabel}</span>
                   </div>
                   <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--px-muted)', marginTop: '10px' }}>
                     Swipes ID pass & records your shift automatically!
