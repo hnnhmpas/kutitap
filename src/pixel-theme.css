@@ -553,3 +553,14 @@ button[style*="var(--px-mint)"]::before { content: '★ '; color: #f5a400; text-
   .px-meter { min-width: 44px; padding: 2px; gap: 2px; }
   .px-root .px-fun-table tbody td, .px-root .px-fun-table thead th { padding-left: 6px; padding-right: 6px; }
 }
+
+/* claw machine: "5 rounds + 4 bonus" with a where-from tooltip */
+.claw-bonus-wrap { position: relative; display: inline-block; }
+button.claw-chip.bonus { border: 0; cursor: pointer; font-family: inherit; font-weight: 800; }
+.claw-chip.bonus.live { animation: px-bob 1s steps(2) infinite; background: var(--px-sun); }
+.claw-bonus-tip { position: absolute; top: calc(100% + 8px); left: 0; z-index: 60; width: max-content; min-width: 190px; max-width: min(260px, 72vw); display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; background: #fff; color: var(--ink); text-shadow: none; box-shadow: 0 0 0 3px var(--ink), 4px 5px 0 3px var(--px-shade); font-size: 12px; font-weight: 700; text-align: left; white-space: normal; }
+.claw-bonus-tip b { font-size: 12px; color: var(--px-accent); }
+.claw-bonus-tip span { display: flex; justify-content: space-between; gap: 12px; }
+.claw-bonus-tip i { font-style: normal; }
+.claw-bonus-tip em { font-style: normal; font-weight: 800; color: var(--px-green-d); }
+.claw-bonus-tip small { font-size: 11px; font-weight: 700; color: var(--px-muted); }

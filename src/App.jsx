@@ -367,7 +367,7 @@ function PixelMeter({ pct, tone = 'pink', segments = 12 }) {
 // ---------------------------------------------------------------------------
 // Kutitap game helpers (Star Coins, monthly tastes, time of day)
 // ---------------------------------------------------------------------------
-const STAR_DEFAULT = { coins: 0, pantry: {}, tried: {}, caught: {}, day: '', roundsUsed: 0, bonusRounds: 0, carry: 0, bonusAwarded: {}, baselineDone: false };
+const STAR_DEFAULT = { coins: 0, pantry: {}, tried: {}, caught: {}, day: '', roundsUsed: 0, bonusFeed: 0, bonusBills: 0, bonusCarry: 0, bonusSplit: 1, carry: 0, bonusAwarded: {}, baselineDone: false };
 const DAILY_ROUNDS = 5;
 const MAX_ROUNDS = 20; // most rounds that can be available at once (today's daily rounds + bonus rounds)
 const TRIES_PER_ROUND = 5;
@@ -376,8 +376,31 @@ const RARE_COINS = 5;
 const roundReward = (wins) => (wins >= 5 ? 3 : wins >= 3 ? 2 : wins >= 1 ? 1 : 0);
 // daily rounds do not carry over: each day starts with DAILY_ROUNDS; only bonus rounds are kept, capped so daily + bonus <= MAX_ROUNDS
 const dailyLeftOf = (star, today) => Math.max(0, DAILY_ROUNDS - (star.day === today ? star.roundsUsed || 0 : 0));
-const roundsAvailable = (star, today) => Math.min(MAX_ROUNDS, dailyLeftOf(star, today) + (star.bonusRounds || 0));
-const cappedBonus = (bonus, dailyLeft) => Math.max(0, Math.min(bonus, MAX_ROUNDS - dailyLeft));
+// Bonus rounds are tracked by where they came from: feeding Kutitap a Yummy food, paying a bill, or "carried over"
+// (saves from before the split kept a single bonus number, which becomes "carried over").
+// Spending order once today's rounds are gone: feeding first, then bills, then carried over.
+// If daily + bonus goes over MAX_ROUNDS, new rounds are not added; a new day trims bills first, then feeding, then carried over.
+const BONUS_SPEND_ORDER = ['bonusFeed', 'bonusBills', 'bonusCarry'];
+const BONUS_TRIM_ORDER = ['bonusBills', 'bonusFeed', 'bonusCarry'];
+const normStar = (s) => (s && s.bonusSplit ? s : { ...s, bonusFeed: 0, bonusBills: 0, bonusCarry: (s && s.bonusRounds) || 0, bonusRounds: 0, bonusSplit: 1 });
+const bonusTotalOf = (s) => { const n = normStar(s); return (n.bonusFeed || 0) + (n.bonusBills || 0) + (n.bonusCarry || 0); };
+const addBonus = (s, key, n, dailyLeft) => {
+  const b = normStar(s);
+  const add = Math.min(n, Math.max(0, MAX_ROUNDS - dailyLeft - bonusTotalOf(b)));
+  return add > 0 ? { ...b, [key]: (b[key] || 0) + add } : b;
+};
+const spendBonus = (s) => {
+  const b = normStar(s);
+  const key = BONUS_SPEND_ORDER.find((k) => (b[k] || 0) > 0);
+  return key ? { ...b, [key]: b[key] - 1 } : b;
+};
+const trimBonus = (s, dailyLeft) => {
+  const b = { ...normStar(s) };
+  let over = bonusTotalOf(b) - (MAX_ROUNDS - dailyLeft);
+  BONUS_TRIM_ORDER.forEach((k) => { if (over > 0) { const take = Math.min(over, b[k] || 0); b[k] = (b[k] || 0) - take; over -= take; } });
+  return b;
+};
+const roundsAvailable = (star, today) => Math.min(MAX_ROUNDS, dailyLeftOf(star, today) + bonusTotalOf(star));
 // Collect 5 of every food in a collection (prize set) = +10 coins, then that collection's counts reset to 0.
 const COLLECTION_GOAL = 5;
 const COLLECTION_BONUS = 10;
@@ -392,9 +415,10 @@ const tasteMonthKey = (d = new Date()) => localDay(d).slice(0, 7);
 
 // Every month Kutitap loves 2 foods, hates 2 and is fine with the rest. The picks come from the month itself,
 // so they are the same on every device and nothing extra has to be saved.
-// From TASTE_V2_START on: the 2 loved foods come from 2 different collections, the 2 hated foods from 2 other different
-// collections (4 collections in all), none of those collections was used the month before, and a food that was loved or
-// hated in the previous 12 months is never picked again. Earlier months keep the old picks (their saved results stay as they were).
+// From TASTE_V2_START on: the month has 2 "craving" collections. Each one hides exactly 1 Yummy food, 1 Yucky food and
+// 6 Okay foods (so 2 Yummy + 2 Yucky in total). Neither collection was used the month before, and foods that were
+// loved or hated in the previous 12 months are avoided when the collection has enough fresh foods left.
+// Earlier months keep the old picks (their saved results stay as they were).
 const TASTE_V2_START = '2026-11';
 const shiftMonth = (monthKey, delta) => {
   const [y, m] = monthKey.split('-').map(Number);
@@ -416,15 +440,18 @@ const tasteMap = (monthKey) => {
         t.loved.concat(t.hated).forEach((id) => recentFoods.add(id));
       }
       let sets = FOOD_SETS.filter((st) => !prevSets.has(st.id));
-      if (sets.length < 4) sets = FOOD_SETS;
-      const pickedSets = sets.map((st) => ({ st, score: hashStr(`${monthKey}|set|${st.id}`) })).sort((a, b) => a.score - b.score).slice(0, 4).map((r) => r.st);
-      const pickFood = (st) => {
+      if (sets.length < 2) sets = FOOD_SETS;
+      const pickedSets = sets.map((st) => ({ st, score: hashStr(`${monthKey}|set|${st.id}`) })).sort((a, b) => a.score - b.score).slice(0, 2).map((r) => r.st);
+      // one Yummy + one Yucky food inside the same collection
+      const pickPair = (st) => {
         let pool = st.foods.filter((f) => !recentFoods.has(f.id));
-        if (pool.length === 0) pool = st.foods;
-        return pool.map((f) => ({ id: f.id, score: hashStr(`${monthKey}|food|${f.id}`) })).sort((a, b) => a.score - b.score)[0].id;
+        if (pool.length < 2) pool = st.foods;
+        const loved = pool.map((f) => ({ id: f.id, score: hashStr(`${monthKey}|food|${f.id}`) })).sort((a, b) => a.score - b.score)[0].id;
+        const hated = pool.filter((f) => f.id !== loved).map((f) => ({ id: f.id, score: hashStr(`${monthKey}|hate|${f.id}`) })).sort((a, b) => a.score - b.score)[0].id;
+        return { loved, hated };
       };
-      const ids = pickedSets.map(pickFood);
-      tasteCache[monthKey] = { loved: ids.slice(0, 2), hated: ids.slice(2, 4) };
+      const pairs = pickedSets.map(pickPair);
+      tasteCache[monthKey] = { loved: pairs.map((p) => p.loved), hated: pairs.map((p) => p.hated) };
     }
   }
   return tasteCache[monthKey];
@@ -501,14 +528,13 @@ function KutitapPanel({ unpaid, total, now, star, setStar, onOpenShop }) {
       if (have - 1 > 0) pantry[id] = have - 1; else delete pantry[id];
       const tried = { ...(prev.tried || {}) };
       tried[monthKey] = { ...(tried[monthKey] || {}), [id]: taste };
-      const next = { ...prev, pantry, tried };
-      if (taste === 'love') next.bonusRounds = cappedBonus((prev.bonusRounds || 0) + 1, dailyLeftOf(prev, today));
+      let next = normStar({ ...prev, pantry, tried });
+      if (taste === 'love') next = addBonus(next, 'bonusFeed', 1, dailyLeftOf(prev, today));
       if (taste === 'hate') {
-        if ((prev.bonusRounds || 0) > 0) next.bonusRounds = prev.bonusRounds - 1;
-        else {
-          const used = prev.day === today ? prev.roundsUsed || 0 : 0;
-          if (used < DAILY_ROUNDS) { next.day = today; next.roundsUsed = used + 1; }
-        }
+        // a Yucky food costs 1 round: today's rounds first, then feeding, bills and carried-over bonus rounds
+        const used = prev.day === today ? prev.roundsUsed || 0 : 0;
+        if (used < DAILY_ROUNDS) { next.day = today; next.roundsUsed = used + 1; }
+        else next = spendBonus(next);
       }
       return next;
     });
@@ -686,6 +712,7 @@ function ClawMachine({ star, setStar, starLoaded, roundsLeft }) {
   const [msg, setMsg] = useState('Line it up, then press Drop!');
   const [flash, setFlash] = useState(null);
   const [scale, setScale] = useState(1);
+  const [bonusTip, setBonusTip] = useState(false);
 
   const xRef = useRef(180);
   const dirRef = useRef(0);
@@ -727,6 +754,10 @@ function ClawMachine({ star, setStar, starLoaded, roundsLeft }) {
   }, []);
 
   const noRounds = starLoaded && roundsLeft <= 0 && !reward && !busy && tries === TRIES_PER_ROUND;
+  const nStar = normStar(star);
+  const dailyNow = dailyLeftOf(star, localDay());
+  const bonusNow = bonusTotalOf(star);
+  const bonusParts = [["From feeding Kutitap's Yummy foods", nStar.bonusFeed || 0], ['From paid bills', nStar.bonusBills || 0], ['Carried over', nStar.bonusCarry || 0]].filter(([, n]) => n > 0);
   const canPlay = starLoaded && roundsLeft > 0 && !reward;
 
   const finishRound = () => {
@@ -737,9 +768,9 @@ function ClawMachine({ star, setStar, starLoaded, roundsLeft }) {
     setStar((prev) => {
       const today = localDay();
       let used = prev.day === today ? prev.roundsUsed || 0 : 0;
-      let bonus = prev.bonusRounds || 0;
-      if (used < DAILY_ROUNDS) used += 1; else bonus = Math.max(0, bonus - 1);
-      return { ...prev, day: today, roundsUsed: used, bonusRounds: bonus, coins: (prev.coins || 0) + coins };
+      let next = normStar(prev);
+      if (used < DAILY_ROUNDS) used += 1; else next = spendBonus(next);
+      return { ...next, day: today, roundsUsed: used, coins: (prev.coins || 0) + coins };
     });
     sfx(rare ? 'rare' : coins > 0 ? 'coin' : 'miss');
   };
@@ -912,8 +943,19 @@ function ClawMachine({ star, setStar, starLoaded, roundsLeft }) {
         </span>
       </div>
       <div className="claw-chips">
-        <span>Rounds left <b>{roundsLeft}</b></span>
-        {(star.bonusRounds || 0) > 0 && <span className="claw-chip bonus">+{star.bonusRounds} bonus</span>}
+        <span><b>{dailyNow}</b> {dailyNow === 1 ? 'round' : 'rounds'} left</span>
+        {bonusNow > 0 && (
+          <span className="claw-bonus-wrap" onMouseEnter={() => setBonusTip(true)} onMouseLeave={() => setBonusTip(false)}>
+            <button type="button" className={`claw-chip bonus${dailyNow === 0 ? ' live' : ''}`} onClick={() => setBonusTip((v) => !v)} aria-expanded={bonusTip} aria-label={`${bonusNow} bonus rounds, tap for details`}>+ {bonusNow} bonus</button>
+            {bonusTip && (
+              <span className="claw-bonus-tip" role="tooltip">
+                <b>Bonus rounds</b>
+                {bonusParts.map(([label, n]) => <span key={label}><i>{label}</i><em>{n}</em></span>)}
+                <small>Used after today's rounds, top to bottom.</small>
+              </span>
+            )}
+          </span>
+        )}
         <span className="claw-chip set">{set.name}</span>
         <span className="claw-coins" title="Star Coins"><StarCoin size={18} />{(star.coins || 0).toLocaleString()}</span>
       </div>
@@ -1840,18 +1882,18 @@ export default function App() {
     setKStar((prev) => {
       if (prev.day === kToday && !prev.carry) return prev;
       const isNewDay = prev.day !== kToday;
-      return { ...prev, day: kToday, roundsUsed: isNewDay ? 0 : prev.roundsUsed || 0, carry: 0, bonusRounds: cappedBonus(prev.bonusRounds || 0, isNewDay ? DAILY_ROUNDS : dailyLeftOf(prev, kToday)) };
+      return { ...trimBonus(prev, isNewDay ? DAILY_ROUNDS : dailyLeftOf(prev, kToday)), day: kToday, roundsUsed: isNewDay ? 0 : prev.roundsUsed || 0, carry: 0 };
     });
   }, [kStarLoaded, kToday, kStar.day, kStar.carry]);
 
-  // one-time: November 2026 got new tastes (loved/hated/okay), so its "already tried" labels start fresh. Everything else saved stays.
+  // one-time: November 2026's Yucky foods moved into the 2 craving collections, so its "already tried" labels start fresh. Everything else saved stays.
   useEffect(() => {
-    if (!kStarLoaded || kStar.tasteV === 2) return;
+    if (!kStarLoaded || kStar.tasteV === 3) return;
     setKStar((prev) => {
-      if (prev.tasteV === 2) return prev;
+      if (prev.tasteV === 3) return prev;
       const tried = { ...(prev.tried || {}) };
       delete tried['2026-11'];
-      return { ...prev, tried, tasteV: 2 };
+      return { ...prev, tried, tasteV: 3 };
     });
   }, [kStarLoaded, kStar.tasteV]);
 
@@ -1865,7 +1907,7 @@ export default function App() {
       fresh.forEach((k) => { nextAwarded[k] = 1; });
       // the first run only records bills that were already paid, so old bills never count as new
       const dailyLeft = dailyLeftOf(prev, kToday);
-      return { ...prev, baselineDone: true, bonusAwarded: nextAwarded, bonusRounds: cappedBonus((prev.bonusRounds || 0) + (prev.baselineDone ? fresh.length : 0), dailyLeft) };
+      return { ...addBonus(prev, 'bonusBills', prev.baselineDone ? fresh.length : 0, dailyLeft), baselineDone: true, bonusAwarded: nextAwarded };
     });
   }, [kDataReady, kPaidSig]);
 
