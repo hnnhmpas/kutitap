@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { buildInvoiceHtml } from './invoiceTemplate';
+import TabHeader, { TabTitle } from './TabHeader';
 import {
   LayoutDashboard,
   Receipt,
@@ -2038,20 +2039,13 @@ export default function App() {
           {/* DASHBOARD TAB */}
           {activeTab === 'dashboard' && (
             <div style={{ width: '100%', display: 'flex', flexDirection: 'column', minHeight: '100%', gap: '20px' }}>
-              <div style={{ background: 'var(--px-card)', borderRadius: 0, '--px': 'panel', padding: '24px 28px', boxShadow: '0 12px 35px rgba(223,177,91,0.2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
-                <div>
-                  <div style={{ fontSize: '12px', fontWeight: 800, color: 'var(--px-accent)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Sparkles style={{ width: '16px', height: '16px' }} /> Overview
-                  </div>
-                  <h2 className="kutitap-title" style={{ fontSize: '26px', color: 'var(--ink)', margin: 0 }}>
-                    {timeGreeting}, Hannah Mae! ✨
-                  </h2>
-                  <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--px-muted)', marginTop: '4px', marginBottom: 0 }}>
-                    Here is your cozy financial summary filtered for year <span style={{ color: 'var(--px-accent)', fontWeight: 800 }}>{dashFilterYear}</span>.
-                  </p>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#FFFFFF', padding: '8px 16px', borderRadius: 0, '--px': 'pill', boxShadow: '0 4px 15px rgba(223,177,91,0.15)' }}>
+              <TabHeader
+                icon={NAV_SPRITES.dashboard}
+                title="Dashboard"
+                lead={<>{timeGreeting}, Hannah Mae! ✨</>}
+                description="Your income, expenses, savings and loans at a glance, filtered by year."
+                actions={
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#FFFFFF', padding: '8px 16px', borderRadius: 0, '--px': 'pill', boxShadow: '0 4px 15px rgba(223,177,91,0.15)' }}>
                   <span style={{ fontSize: '12px', fontWeight: 800, color: 'var(--ink)' }}>Filter Year:</span>
                   <select
                     value={dashFilterYear}
@@ -2061,7 +2055,8 @@ export default function App() {
                     {availableYears.map(y => (<option key={y} value={y}>{y}</option>))}
                   </select>
                 </div>
-              </div>
+                }
+              />
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
                 <div style={{ backgroundColor: 'var(--px-card)', borderRadius: 0, '--px': 'panel', padding: '20px', boxShadow: '0 8px 25px rgba(223,177,91,0.15)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -2176,13 +2171,19 @@ export default function App() {
           {/* INCOME & EXPENSE TAB */}
           {activeTab === 'income-expense' && (
             <div style={{ width: '100%', display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
-              <div style={{ textAlign: 'center', marginBottom: '16px', position: 'relative', flexShrink: 0 }}>
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '14px' }}>
+              <TabHeader
+                icon={NAV_SPRITES['income-expense']}
+                title="Income & Expense"
+                description="Log what comes in and goes out, then see where each month's money went."
+                style={{ marginBottom: '16px' }}
+                actions={
+<div style={{ position: 'relative', maxWidth: '100%' }}>
+                <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px', flexWrap: 'wrap', maxWidth: '100%' }}>
                   <button onClick={handlePrevMonth} style={{ backgroundColor: '#FFFFFF', borderRadius: 0, '--px': 'pill', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--px-accent)', fontWeight: 800, boxShadow: '0 4px 12px rgba(223,177,91,0.2)' }}>
                     <ChevronLeft style={{ width: '16px', height: '16px' }} />
                   </button>
 
-                  <h2 onClick={() => setIsMonthPickerOpen(!isMonthPickerOpen)} className="kutitap-title" style={{ fontSize: '28px', color: 'var(--px-accent)', margin: 0, cursor: 'pointer', userSelect: 'none', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <h2 onClick={() => setIsMonthPickerOpen(!isMonthPickerOpen)} className="kutitap-title" style={{ fontSize: '20px', color: 'var(--px-accent)', margin: 0, cursor: 'pointer', userSelect: 'none', display: 'flex', alignItems: 'center', gap: '6px' }}>
                     {months[currentMonthIndex]} <span>{currentYear}</span>
                     <ChevronDown style={{ width: '16px', height: '16px', color: 'var(--px-muted)' }} />
                   </h2>
@@ -2193,7 +2194,7 @@ export default function App() {
                 </div>
 
                 {isMonthPickerOpen && (
-                  <div style={{ position: 'absolute', top: '55px', left: '50%', transform: 'translateX(-50%)', backgroundColor: '#FFFFFF', borderRadius: 0, '--px': 'panel', padding: '20px', boxShadow: '0 20px 40px rgba(223,177,91,0.25)', zIndex: 100, width: '320px' }}>
+                  <div style={{ position: 'absolute', top: 'calc(100% + 10px)', right: 0, backgroundColor: '#FFFFFF', borderRadius: 0, '--px': 'panel', padding: '20px', boxShadow: '0 20px 40px rgba(223,177,91,0.25)', zIndex: 100, width: 'min(320px, calc(100vw - 48px))', boxSizing: 'border-box' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
                       <span style={{ fontSize: '12px', fontWeight: 800, color: 'var(--px-accent)', textTransform: 'uppercase' }}>Select Month & Year</span>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -2212,6 +2213,8 @@ export default function App() {
                   </div>
                 )}
               </div>
+                }
+              />
 
               <style>{`
                 .planner-grid-fullscreen {
@@ -2459,7 +2462,7 @@ export default function App() {
                     <h2 className="kutitap-title" style={{ fontSize: '24px', color: 'var(--px-accent)', margin: '0 0 4px 0', display: 'flex', alignItems: 'center', gap: '10px' }}><Sprite src={spPudding} className="px-logo-sprite" /> Honey Pot</h2>
                     <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--px-muted)', margin: 0 }}>Create goals, track progress, and auto-sync monthly contributions with dynamic redistribution!</p>
                   </div>
-                  <button onClick={() => setIsAddGoalModalOpen(true)} style={{ backgroundColor: 'var(--px-pink)', color: '#FFFFFF', borderRadius: 0, '--px': 'pill', padding: '12px 22px', fontWeight: 800, fontSize: '14px', cursor: 'pointer', boxShadow: '0 6px 20px rgba(223,177,91,0.35)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <button onClick={() => setIsAddGoalModalOpen(true)} style={{ backgroundColor: 'var(--px-pink)', color: '#FFFFFF', borderRadius: 0, '--px': 'pill', padding: '12px 22px', fontWeight: 800, fontSize: '14px', cursor: 'pointer', boxShadow: '0 6px 20px rgba(223,177,91,0.35)', display: 'flex', alignItems: 'center', gap: '8px', maxWidth: '100%', textAlign: 'left' }}>
                     <Plus style={{ width: '16px', height: '16px' }} /> Add New Savings Goal
                   </button>
                 </div>
@@ -2724,14 +2727,12 @@ export default function App() {
           {/* LOANS TAB */}
           {activeTab === 'loans' && (
             <div style={{ width: '100%', display: 'flex', flexDirection: 'column', minHeight: '100%', gap: '16px' }}>
-              <div style={{ background: 'var(--px-card)', borderRadius: 0, '--px': 'panel', padding: '22px 26px', boxShadow: '0 10px 30px rgba(223,177,91,0.18)', display: 'flex', flexDirection: 'column', gap: '14px', flexShrink: 0 }}>
+              <div style={{ background: 'var(--px-card)', borderRadius: 0, '--px': 'panel', padding: '24px 28px', boxShadow: '0 10px 30px rgba(223,177,91,0.18)', display: 'flex', flexDirection: 'column', gap: '14px', flexShrink: 0, width: '100%', boxSizing: 'border-box' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-                  <div>
-                    <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--px-accent)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <CreditCard style={{ width: '16px', height: '16px' }} /> Loans Dashboard
-                    </div>
+                  <div style={{ flex: '1 1 260px', minWidth: 0 }}>
+                    <TabTitle icon={NAV_SPRITES.loans} title="Loans" description="Track what you owe, what you have paid and what is left on every loan." />
                     
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '4px', position: 'relative' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '10px', position: 'relative', flexWrap: 'wrap' }}>
                       <div
                         onClick={() => setIsDashMonthPickerOpen(!isDashMonthPickerOpen)}
                         className="kutitap-title"
@@ -2942,7 +2943,13 @@ export default function App() {
                 .cutesy-dropdown option:hover, .cutesy-dropdown option:checked { background-color: var(--px-sun) !important; color: var(--ink) !important; }
               `}</style>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: '20px', alignItems: 'stretch' }}>
+              <TabHeader
+                icon={NAV_SPRITES.attendance}
+                title="Attendance"
+                description="Punch in with your ID pass, review your shifts and generate your monthly invoice."
+              />
+
+              <div className="att-grid">
                 <div style={{ backgroundColor: 'var(--px-card)', borderRadius: 0, '--px': 'panel', padding: '16px', boxShadow: '0 8px 25px rgba(223,177,91,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
                   <div className={isSwipingID ? 'animate-swipe-id' : ''} style={{ width: '100%', maxWidth: '420px', aspectRatio: '1.58 / 1', borderRadius: 0, '--px': 'card', overflow: 'hidden', boxShadow: '0 8px 25px rgba(223,177,91,0.25)', position: 'relative' }}>
                     <img src="https://i.imgur.com/VeQr3gX.png" alt="Company ID Pass" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
@@ -2980,7 +2987,7 @@ export default function App() {
               </div>
 
               <div style={{ backgroundColor: '#FFFFFF', borderRadius: 0, '--px': 'panel', padding: '18px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px', boxShadow: '0 6px 20px rgba(223,177,91,0.12)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap', minWidth: 0 }}>
                   <span style={{ fontSize: '15px', fontWeight: 800, color: 'var(--ink)' }}>Viewing Month:</span>
                   <select value={attMonthIndex} onChange={(e) => setAttMonthIndex(parseInt(e.target.value))} style={{ backgroundColor: 'var(--px-butter)', borderRadius: 0, '--px': 'pill', padding: '8px 16px', fontWeight: 800, color: 'var(--px-accent)', fontSize: '14px', cursor: 'pointer' }}>
                     {months.map((m, idx) => (<option key={m} value={idx}>{m}</option>))}
