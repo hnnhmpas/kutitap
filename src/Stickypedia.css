@@ -1,0 +1,108 @@
+/* STICKY-PEDIA: 8-bit notes. Font = the app's number font stack (DotGothic16 digits, Pixelify Sans letters). */
+.sp-root, .sp-root * { box-sizing: border-box; font-family: 'DotGothic16', 'Pixelify Sans', ui-monospace, 'Courier New', monospace; -webkit-font-smoothing: none; }
+.sp-root { position: fixed; color: var(--ink, #4a1d36); }
+.sp-root button { border: 0; outline: none; margin: 0; cursor: pointer; color: inherit; }
+.sp-root button:focus-visible { outline: 3px dashed var(--px-accent, #c2306b); outline-offset: 2px; }
+
+/* ---------- buttons ---------- */
+.sp-btn { background: var(--px-sun, #ffe08a); padding: 7px 12px; font-size: 15px; line-height: 1; white-space: nowrap; box-shadow: -3px 0 0 0 var(--ink), 3px 0 0 0 var(--ink), 0 -3px 0 0 var(--ink), 0 3px 0 0 var(--ink); display: inline-flex; align-items: center; gap: 6px; transition: transform 0.08s steps(2); }
+.sp-btn:hover { transform: translateY(-2px); filter: brightness(1.06); }
+.sp-btn:active { transform: translateY(2px); }
+.sp-btn.sm { padding: 6px 9px; font-size: 14px; }
+.sp-btn.danger { background: #ffb3c7; }
+.sp-btn.close { padding: 7px 10px; background: #fff; }
+.sp-btn.off { background: #e8d9c0; color: #9a8070; cursor: not-allowed; }
+.sp-btn.off:hover { transform: none; filter: none; }
+.sp-btn.off:active { transform: none; }
+
+/* little glyphs drawn with CSS so they stay crisp */
+.sp-sw-ico { display: inline-block; width: 12px; height: 12px; background: conic-gradient(#f5cb45 0 25%, #52cce2 0 50%, #f57fbc 0 75%, #7dd65a 0); box-shadow: 0 0 0 2px var(--ink); flex-shrink: 0; }
+.sp-trash { display: inline-block; width: 11px; height: 13px; flex-shrink: 0; background: linear-gradient(var(--ink), var(--ink)) 4px 0 / 3px 2px no-repeat, linear-gradient(var(--ink), var(--ink)) 0 2px / 11px 2px no-repeat, linear-gradient(90deg, var(--ink) 2px, transparent 2px calc(100% - 2px), var(--ink) 0) 1px 4px / 9px 9px no-repeat, linear-gradient(var(--ink), var(--ink)) 1px 11px / 9px 2px no-repeat, linear-gradient(var(--ink), var(--ink)) 4px 6px / 1px 4px no-repeat, linear-gradient(var(--ink), var(--ink)) 6px 6px / 1px 4px no-repeat; }
+.sp-x { display: inline-block; width: 11px; height: 11px; background: linear-gradient(45deg, transparent 43%, var(--ink) 43% 57%, transparent 57%), linear-gradient(-45deg, transparent 43%, var(--ink) 43% 57%, transparent 57%); flex-shrink: 0; }
+
+/* ---------- retro scrollbar ---------- */
+.sp-scroll { overflow-y: auto; overflow-x: hidden; min-height: 0; flex: 1; }
+.sp-scroll::-webkit-scrollbar { width: 18px; }
+.sp-scroll::-webkit-scrollbar-track { background: var(--px-butter, #ffe9a8); box-shadow: inset 3px 0 0 var(--ink), inset -3px 0 0 var(--ink); }
+.sp-scroll::-webkit-scrollbar-thumb { background: var(--px-pink, #f0589a); box-shadow: inset 0 0 0 3px var(--ink), inset 0 0 0 6px #ffb3d4; min-height: 36px; }
+.sp-scroll::-webkit-scrollbar-button:single-button { display: block; height: 18px; background: var(--px-sun, #ffe08a); box-shadow: inset 0 0 0 3px var(--ink); }
+.sp-scroll::-webkit-scrollbar-button:single-button:vertical:decrement { background: conic-gradient(from 135deg at 50% 0, var(--ink) 0 90deg, transparent 0) 50% 6px / 10px 5px no-repeat, var(--px-sun, #ffe08a); }
+.sp-scroll::-webkit-scrollbar-button:single-button:vertical:increment { background: conic-gradient(from -45deg at 50% 100%, var(--ink) 0 90deg, transparent 0) 50% 6px / 10px 5px no-repeat, var(--px-sun, #ffe08a); }
+@supports not selector(::-webkit-scrollbar) { .sp-scroll { scrollbar-color: var(--px-pink, #f0589a) var(--px-butter, #ffe9a8); scrollbar-width: auto; } }
+
+/* ---------- the list window (fixed size) ---------- */
+.sp-list { display: flex; flex-direction: column; background: var(--px-card, #fff3d4); box-shadow: -4px 0 0 0 var(--ink), 4px 0 0 0 var(--ink), 0 -4px 0 0 var(--ink), 0 4px 0 0 var(--ink), 8px 10px 0 0 var(--px-shade, rgba(74, 29, 54, 0.3)); user-select: none; }
+.sp-list-head { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: var(--px-pink, #f0589a); border-bottom: 4px solid var(--ink); cursor: grab; touch-action: none; flex-wrap: wrap; min-width: 0; }
+.sp-list-ico { width: 32px; height: 32px; image-rendering: pixelated; flex-shrink: 0; filter: drop-shadow(2px 2px 0 var(--ink)); }
+.sp-list-title { flex: 1 1 110px; min-width: 0; font-size: 22px; color: #fff; text-shadow: 2px 2px 0 var(--ink); overflow-wrap: anywhere; }
+.sp-list-btns { display: inline-flex; gap: 10px; align-items: center; flex-wrap: wrap; cursor: default; }
+.sp-list-sub { padding: 8px 16px 2px; font-size: 14px; color: var(--px-muted, #8a5a74); }
+.sp-cards { list-style: none; margin: 0; padding: 10px 14px 16px 12px; display: flex; flex-direction: column; gap: 14px; }
+.sp-empty { height: 100%; min-height: 200px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; font-size: 20px; text-align: center; padding: 20px; }
+.sp-empty img { width: 72px; height: 72px; image-rendering: pixelated; opacity: 0.8; }
+.sp-empty-sub { font-size: 14px; color: var(--px-muted, #8a5a74); }
+
+/* tooltip on the disabled "+ New Note" */
+.sp-tipwrap { position: relative; display: inline-flex; }
+.sp-tipwrap::after { content: attr(data-tip); position: absolute; top: calc(100% + 10px); right: 0; z-index: 5; width: max-content; max-width: 220px; padding: 6px 10px; background: #fff; font-size: 13px; text-align: left; white-space: normal; box-shadow: 0 0 0 3px var(--ink), 3px 4px 0 3px var(--px-shade, rgba(74, 29, 54, 0.3)); opacity: 0; visibility: hidden; pointer-events: none; }
+.sp-tipwrap.has-tip:hover::after, .sp-tipwrap.has-tip:focus-within::after, .sp-tipwrap.show::after { opacity: 1; visibility: visible; }
+
+/* ---------- note cards in the list ---------- */
+.sp-card { background: var(--c-body); padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 8px; box-shadow: -3px 0 0 0 var(--ink), 3px 0 0 0 var(--ink), 0 -3px 0 0 var(--ink), 0 3px 0 0 var(--ink), 5px 7px 0 0 var(--px-shade, rgba(74, 29, 54, 0.3)); border-top: 8px solid var(--c-head); margin-top: 3px; }
+.sp-card-main { background: none; padding: 0; text-align: left; display: flex; flex-direction: column; gap: 6px; width: 100%; min-width: 0; }
+.sp-card-text { font-size: 17px; line-height: 1.3; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.sp-card-meta { font-size: 13px; color: rgba(74, 29, 54, 0.75); }
+.sp-card-actions { display: flex; gap: 10px; flex-wrap: wrap; padding: 2px 3px; }
+.sp-card-colors { padding: 4px 3px 0; }
+
+/* ---------- color swatches ---------- */
+.sp-colors { display: inline-flex; gap: 7px; align-items: center; flex-wrap: wrap; min-width: 0; }
+.sp-sw { width: 20px; height: 20px; padding: 0; box-shadow: 0 0 0 3px var(--ink); }
+.sp-sw.on { box-shadow: 0 0 0 3px var(--ink), 0 0 0 6px #fff; }
+.sp-sw:hover { transform: translateY(-2px); }
+
+/* ---------- a floating note ---------- */
+.sp-note { filter: drop-shadow(6px 8px 0 rgba(74, 29, 54, 0.28)); touch-action: pan-y; user-select: none; }
+.sp-note-in { position: absolute; inset: 0; display: flex; flex-direction: column; background: var(--c-body); box-shadow: -3px 0 0 0 var(--ink), 3px 0 0 0 var(--ink), 0 -3px 0 0 var(--ink), 0 3px 0 0 var(--ink); overflow: hidden; }
+.sp-note-head { flex: 0 0 auto; min-height: 32px; padding: 4px 6px; display: flex; align-items: center; justify-content: space-between; gap: 6px; background: var(--c-head); border-bottom: 3px solid var(--ink); cursor: grab; touch-action: none; min-width: 0; overflow: hidden; }
+.sp-grip { flex: 1; min-width: 6px; height: 12px; background: radial-gradient(circle, rgba(74, 29, 54, 0.55) 1.5px, transparent 2px) 0 0 / 8px 6px; }
+.sp-head-btns { display: inline-flex; gap: 4px; flex-shrink: 0; cursor: default; }
+.sp-ibtn { width: 22px; height: 22px; padding: 0; display: grid; place-items: center; background: #fff; box-shadow: 0 0 0 2px var(--ink); }
+.sp-ibtn:hover { filter: brightness(1.08); transform: translateY(-1px); }
+.sp-ibtn:active { transform: translateY(1px); }
+.sp-note .sp-colors { gap: 5px; }
+.sp-note .sp-sw { width: 16px; height: 16px; box-shadow: 0 0 0 2px var(--ink); }
+.sp-note .sp-sw.on { box-shadow: 0 0 0 2px var(--ink), 0 0 0 4px #fff; }
+
+.sp-editor { flex: 1 1 auto; min-height: 0; padding: 8px 10px; outline: none; overflow-y: auto; overflow-x: hidden; font-size: 17px; line-height: 1.35; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; user-select: text; -webkit-user-select: text; caret-color: var(--ink); cursor: text; }
+.sp-editor.is-empty::before { content: attr(data-ph); color: rgba(74, 29, 54, 0.45); pointer-events: none; }
+.sp-editor b { font-weight: 700; } .sp-editor i { font-style: italic; } .sp-editor u { text-decoration: underline; } .sp-editor s { text-decoration: line-through; }
+.sp-editor::-webkit-scrollbar { width: 10px; }
+.sp-editor::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.45); }
+.sp-editor::-webkit-scrollbar-thumb { background: var(--c-head); box-shadow: inset 0 0 0 2px var(--ink); }
+
+.sp-foot { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 4px 8px; flex-wrap: wrap; padding: 5px 8px; border-top: 3px solid var(--ink); background: rgba(255, 255, 255, 0.55); }
+.sp-tools { display: inline-flex; gap: 4px; }
+.sp-tool { width: 22px; height: 22px; padding: 0; background: #fff; font-size: 14px; line-height: 1; box-shadow: 0 0 0 2px var(--ink); display: grid; place-items: center; }
+.sp-tool.on { background: var(--c-head); box-shadow: 0 0 0 2px var(--ink), inset 0 0 0 2px #fff; }
+.sp-tool.t-bold { font-weight: 700; } .sp-tool.t-italic { font-style: italic; } .sp-tool.t-underline { text-decoration: underline; } .sp-tool.t-strikeThrough { text-decoration: line-through; }
+.sp-count { font-size: 13px; margin-left: auto; white-space: nowrap; }
+.sp-count.full { color: var(--px-accent, #c2306b); }
+
+/* resize handles: 4 corners + 4 edges (a finger-sized hit area on touch screens) */
+.sp-h { position: absolute; z-index: 3; touch-action: none; }
+.sp-h.n, .sp-h.s { left: 12px; right: 12px; height: 12px; cursor: ns-resize; }
+.sp-h.e, .sp-h.w { top: 12px; bottom: 12px; width: 12px; cursor: ew-resize; }
+.sp-h.n { top: -6px; } .sp-h.s { bottom: -6px; } .sp-h.e { right: -6px; } .sp-h.w { left: -6px; }
+.sp-h.ne, .sp-h.nw, .sp-h.se, .sp-h.sw { width: 20px; height: 20px; }
+.sp-h.ne { top: -8px; right: -8px; cursor: nesw-resize; } .sp-h.nw { top: -8px; left: -8px; cursor: nwse-resize; }
+.sp-h.se { bottom: -8px; right: -8px; cursor: nwse-resize; } .sp-h.sw { bottom: -8px; left: -8px; cursor: nesw-resize; }
+.sp-h.se::after { content: ''; position: absolute; right: 9px; bottom: 9px; width: 8px; height: 8px; background: linear-gradient(135deg, transparent 50%, var(--ink) 50% 62%, transparent 62% 76%, var(--ink) 76%); pointer-events: none; }
+@media (pointer: coarse) { .sp-h.n, .sp-h.s { height: 22px; } .sp-h.e, .sp-h.w { width: 22px; } .sp-h.n { top: -11px; } .sp-h.s { bottom: -11px; } .sp-h.e { right: -11px; } .sp-h.w { left: -11px; } }
+
+/* ---------- delete confirmation ---------- */
+.sp-modal-back { inset: 0; z-index: 10020; display: grid; place-items: center; background: rgba(74, 29, 54, 0.55); padding: 16px; }
+.sp-modal { position: relative; width: min(340px, 100%); padding: 22px 20px 18px; display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; background: var(--px-card, #fff3d4); box-shadow: -4px 0 0 0 var(--ink), 4px 0 0 0 var(--ink), 0 -4px 0 0 var(--ink), 0 4px 0 0 var(--ink), 8px 10px 0 0 var(--px-shade, rgba(74, 29, 54, 0.3)); }
+.sp-modal p { margin: 0; font-size: 20px; line-height: 1.3; overflow-wrap: anywhere; }
+.sp-modal-bang { width: 36px; height: 36px; display: grid; place-items: center; background: #ff7aa5; color: #fff; font-size: 24px; text-shadow: 2px 2px 0 var(--ink); box-shadow: 0 0 0 3px var(--ink); animation: px-bob 1s steps(2) infinite; }
+.sp-modal-btns { display: flex; gap: 18px; flex-wrap: wrap; justify-content: center; }

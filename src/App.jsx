@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { buildInvoiceHtml } from './invoiceTemplate';
 import TabHeader, { TabTitle } from './TabHeader';
+import Stickypedia from './Stickypedia';
+import notesIcon from './assets/ui/notes-icon.png';
 import {
   LayoutDashboard,
   Receipt,
@@ -1857,6 +1859,9 @@ export default function App() {
   const [isShopOpen, setIsShopOpen] = useState(false);
   const [fabMenuOpen, setFabMenuOpen] = useState(false); // bottom-right mini menu (sound, shop, Catculator)
   const [calcMode, setCalcMode] = useState('closed'); // closed | min | open
+  // Sticky-pedia notes (saved in Firebase; the notes list window is just a toggle)
+  const [stickyNotes, setStickyNotes] = useFirebaseSync('kutitap_notes', []);
+  const [notesListOpen, setNotesListOpen] = useState(false);
   const [calcHistory, setCalcHistory] = useFirebaseSync('kutitap_calc_history', []);
   const kNow = useNow(60000);
   const kTod = todOf(kNow);
@@ -1924,7 +1929,11 @@ export default function App() {
       <button type="button" style={{ '--i': 2 }} tabIndex={fabMenuOpen ? 0 : -1} className={`calc-fab fab-item${fabMenuOpen ? ' fab-open' : ''}${calcMode === 'open' ? ' open' : ''}`} onClick={() => setCalcMode((m) => (m === 'open' ? 'min' : 'open'))} aria-label="Catculator" title="Catculator" aria-pressed={calcMode === 'open'}>
         <img className="px-sprite" src={calcIcon} alt="" />
       </button>
+      <button type="button" style={{ '--i': 3 }} tabIndex={fabMenuOpen ? 0 : -1} className={`notes-fab fab-item${fabMenuOpen ? ' fab-open' : ''}${notesListOpen ? ' open' : ''}`} onClick={() => setNotesListOpen((v) => !v)} aria-label="Sticky-pedia notes" title="Sticky-pedia" aria-pressed={notesListOpen}>
+        <img className="px-sprite" src={notesIcon} alt="" />
+      </button>
       <Catculator mode={calcMode} setMode={setCalcMode} history={calcHistory} setHistory={setCalcHistory} />
+      <Stickypedia notes={stickyNotes} setNotes={setStickyNotes} listOpen={notesListOpen} setListOpen={setNotesListOpen} />
       <div className="px-root" style={{
         position: 'fixed',
         inset: 0,
