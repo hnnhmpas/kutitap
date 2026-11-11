@@ -31,7 +31,7 @@
 @supports not selector(::-webkit-scrollbar) { .sp-scroll { scrollbar-color: var(--px-pink, #f0589a) var(--px-butter, #ffe9a8); scrollbar-width: auto; } }
 
 /* ---------- the list window (fixed size) ---------- */
-.sp-list { display: flex; flex-direction: column; background: var(--px-card, #fff3d4); box-shadow: -4px 0 0 0 var(--ink), 4px 0 0 0 var(--ink), 0 -4px 0 0 var(--ink), 0 4px 0 0 var(--ink), 8px 10px 0 0 var(--px-shade, rgba(74, 29, 54, 0.3)); user-select: none; }
+.sp-list { display: flex; flex-direction: column; background: var(--px-card, #fff3d4); box-shadow: -4px 0 0 0 var(--ink), 4px 0 0 0 var(--ink), 0 -4px 0 0 var(--ink), 0 4px 0 0 var(--ink), 8px 10px 0 0 var(--px-shade, rgba(74, 29, 54, 0.3)); user-select: none; touch-action: pan-y; }
 .sp-list-head { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: var(--px-pink, #f0589a); border-bottom: 4px solid var(--ink); cursor: grab; touch-action: none; flex-wrap: wrap; min-width: 0; }
 .sp-list-ico { width: 32px; height: 32px; image-rendering: pixelated; flex-shrink: 0; filter: drop-shadow(2px 2px 0 var(--ink)); }
 .sp-list-title { flex: 1 1 110px; min-width: 0; font-size: 22px; color: #fff; text-shadow: 2px 2px 0 var(--ink); overflow-wrap: anywhere; }

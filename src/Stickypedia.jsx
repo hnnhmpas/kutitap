@@ -1,5 +1,5 @@
 // STICKY-PEDIA: floating 8-bit sticky notes.
-//   NotesListModal    the list window (fixed size, same as the Claw Machine window)
+//   NotesListModal    the list window (starts at the Claw Machine window size; resizable and draggable)
 //   StickyNoteWindow  one floating note (50% of the list window; resizable 50% - 150%; mouse handles + pinch)
 //   NoteColorPicker   the 5 theme colors
 //   DeleteConfirmModal  "Delete this note permanently?"
@@ -265,6 +265,7 @@ export function StickyNoteWindow({ note, z, autoFocus, onFront, onPatch, onText,
   const [picking, setPicking] = useState(false);
   const geoRef = useRef(geo);
   geoRef.current = geo;
+  const setG = (g) => { geoRef.current = g; setGeo(g); }; // keep the ref current even before React re-renders
   const act = useRef(null);
   const pointers = useRef(new Map());
 
@@ -293,7 +294,7 @@ export function StickyNoteWindow({ note, z, autoFocus, onFront, onPatch, onText,
   const moveDrag = (e) => {
     const a = act.current;
     if (!a || a.type !== 'drag') return;
-    setGeo((g) => ({ ...g, x: clamp(e.clientX - a.dx, 0, Math.max(0, vp.w - w)), y: clamp(e.clientY - a.dy, 0, Math.max(0, vp.h - h)) }));
+    setG({ ...geoRef.current, x: clamp(e.clientX - a.dx, 0, Math.max(0, vp.w - w)), y: clamp(e.clientY - a.dy, 0, Math.max(0, vp.h - h)) });
   };
 
   // resize with the 8 handles (mouse or touch drag)
@@ -310,7 +311,7 @@ export function StickyNoteWindow({ note, z, autoFocus, onFront, onPatch, onText,
     const [sx, sy] = HANDLES[a.dir];
     const nw = sx ? clamp(a.g.w + sx * (e.clientX - a.px), minW, Math.min(maxW, vp.w - 8)) : a.g.w;
     const nh = sy ? clamp(a.g.h + sy * (e.clientY - a.py), minH, Math.min(maxH, vp.h - 8)) : a.g.h;
-    setGeo({ w: nw, h: nh, x: sx < 0 ? a.g.x + (a.g.w - nw) : a.g.x, y: sy < 0 ? a.g.y + (a.g.h - nh) : a.g.y });
+    setG({ w: nw, h: nh, x: sx < 0 ? a.g.x + (a.g.w - nw) : a.g.x, y: sy < 0 ? a.g.y + (a.g.h - nh) : a.g.y });
   };
 
   // two-finger pinch anywhere on the note
@@ -330,7 +331,7 @@ export function StickyNoteWindow({ note, z, autoFocus, onFront, onPatch, onText,
       const f = Math.hypot(p.x - q.x, p.y - q.y) / a.d0;
       const nw = clamp(a.g.w * f, minW, Math.min(maxW, vp.w - 8));
       const nh = clamp(a.g.h * f, minH, Math.min(maxH, vp.h - 8));
-      setGeo({ w: nw, h: nh, x: a.g.x - (nw - a.g.w) / 2, y: a.g.y - (nh - a.g.h) / 2 });
+      setG({ w: nw, h: nh, x: a.g.x - (nw - a.g.w) / 2, y: a.g.y - (nh - a.g.h) / 2 });
     }
   };
   const onRootUp = (e) => {
@@ -395,15 +396,30 @@ function NoteCard({ note, onOpen, onColor, onAskDelete }) {
 }
 
 // ---------------------------------------------------------------- NotesListModal
-export function NotesListModal({ notes, z, onFront, onNew, onOpen, onColor, onAskDelete, onClose }) {
+// Starts at the Claw Machine window size (420 x 829). Resizable: 300 x 340 up to 150% of the start size (never bigger than the screen).
+const LIST_MIN_W = 300;
+const LIST_MIN_H = 340;
+export const defaultListGeo = () => ({ x: Math.max(8, window.innerWidth - LIST_W - 90), y: 8, w: LIST_W, h: LIST_H });
+
+export function NotesListModal({ notes, geo: saved, z, onFront, onGeo, onNew, onOpen, onColor, onAskDelete, onClose }) {
   const vp = useViewport();
-  const w = Math.min(LIST_W, vp.w - 16);
-  const h = Math.min(LIST_H, vp.h - 16);
-  const [pos, setPos] = useState(() => ({ x: Math.max(8, window.innerWidth - LIST_W - 90), y: 8 }));
+  const maxW = LIST_W * NOTE_MAX;
+  const maxH = LIST_H * NOTE_MAX;
+  const [geo, setGeo] = useState(saved);
+  const geoRef = useRef(geo);
+  geoRef.current = geo;
+  const setG = (g) => { geoRef.current = g; setGeo(g); }; // keep the ref current even before React re-renders
+  const act = useRef(null);
+  const pointers = useRef(new Map());
   const [maxTip, setMaxTip] = useState(false);
-  const drag = useRef(null);
-  const x = clamp(pos.x, 0, Math.max(0, vp.w - w));
-  const y = clamp(pos.y, 0, Math.max(0, vp.h - h));
+
+  // keep the window inside the screen (also on a smaller screen than the one it was saved on)
+  const w = Math.max(Math.min(LIST_MIN_W, vp.w - 16), Math.min(geo.w, vp.w - 16));
+  const h = Math.max(Math.min(LIST_MIN_H, vp.h - 16), Math.min(geo.h, vp.h - 16));
+  const x = clamp(geo.x, 0, Math.max(0, vp.w - w));
+  const y = clamp(geo.y, 0, Math.max(0, vp.h - h));
+  const limits = () => ({ minW: Math.min(LIST_MIN_W, vp.w - 16), maxW: Math.min(maxW, vp.w - 16), minH: Math.min(LIST_MIN_H, vp.h - 16), maxH: Math.min(maxH, vp.h - 16) });
+
   const full = notes.length >= MAX_NOTES;
   const sorted = [...notes].sort((a, b) => (b.lastUpdated || 0) - (a.lastUpdated || 0));
 
@@ -413,18 +429,83 @@ export function NotesListModal({ notes, z, onFront, onNew, onOpen, onColor, onAs
     return () => clearTimeout(t);
   }, [maxTip]);
 
+  const finish = () => {
+    if (!act.current) return;
+    act.current = null;
+    const g = geoRef.current;
+    onGeo({ x: Math.round(g.x), y: Math.round(g.y), w: Math.round(g.w), h: Math.round(g.h) });
+  };
+
+  // drag by the header
+  const startDrag = (e) => {
+    act.current = { type: 'drag', dx: e.clientX - x, dy: e.clientY - y };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+  const moveDrag = (e) => {
+    const a = act.current;
+    if (!a || a.type !== 'drag') return;
+    setG({ ...geoRef.current, x: clamp(e.clientX - a.dx, 0, Math.max(0, vp.w - w)), y: clamp(e.clientY - a.dy, 0, Math.max(0, vp.h - h)) });
+  };
+
+  // resize with the 8 handles (mouse or touch drag)
+  const startResize = (dir) => (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onFront();
+    act.current = { type: 'resize', dir, px: e.clientX, py: e.clientY, g: { x, y, w, h } };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+  const moveResize = (e) => {
+    const a = act.current;
+    if (!a || a.type !== 'resize') return;
+    const L = limits();
+    const [sx, sy] = HANDLES[a.dir];
+    const nw = sx ? clamp(a.g.w + sx * (e.clientX - a.px), L.minW, L.maxW) : a.g.w;
+    const nh = sy ? clamp(a.g.h + sy * (e.clientY - a.py), L.minH, L.maxH) : a.g.h;
+    setG({ w: nw, h: nh, x: sx < 0 ? a.g.x + (a.g.w - nw) : a.g.x, y: sy < 0 ? a.g.y + (a.g.h - nh) : a.g.y });
+  };
+
+  // two-finger pinch anywhere on the window
+  const onRootDown = (e) => {
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.current.size === 2) {
+      const [p, q] = [...pointers.current.values()];
+      act.current = { type: 'pinch', d0: Math.hypot(p.x - q.x, p.y - q.y) || 1, g: { x, y, w, h } };
+    }
+  };
+  const onRootMove = (e) => {
+    if (!pointers.current.has(e.pointerId)) return;
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const a = act.current;
+    if (a && a.type === 'pinch' && pointers.current.size === 2) {
+      const [p, q] = [...pointers.current.values()];
+      const f = Math.hypot(p.x - q.x, p.y - q.y) / a.d0;
+      const L = limits();
+      const nw = clamp(a.g.w * f, L.minW, L.maxW);
+      const nh = clamp(a.g.h * f, L.minH, L.maxH);
+      setG({ w: nw, h: nh, x: a.g.x - (nw - a.g.w) / 2, y: a.g.y - (nh - a.g.h) / 2 });
+    }
+  };
+  const onRootUp = (e) => {
+    pointers.current.delete(e.pointerId);
+    if (act.current && act.current.type === 'pinch' && pointers.current.size < 2) finish();
+  };
+
   const clickNew = () => { if (full) setMaxTip(true); else onNew(); };
 
   return (
-    <div className="sp-root sp-list" style={{ left: x, top: y, width: w, height: h, zIndex: z }} role="dialog" aria-label="Sticky-pedia" onPointerDownCapture={onFront}>
-      <div
-        className="sp-list-head"
-        onPointerDown={(e) => { drag.current = { dx: e.clientX - x, dy: e.clientY - y }; e.currentTarget.setPointerCapture(e.pointerId); }}
-        onPointerMove={(e) => { const d = drag.current; if (d) setPos({ x: clamp(e.clientX - d.dx, 0, Math.max(0, vp.w - w)), y: clamp(e.clientY - d.dy, 0, Math.max(0, vp.h - h)) }); }}
-        onPointerUp={() => { drag.current = null; }}
-        onPointerCancel={() => { drag.current = null; }}
-        title="Drag to move"
-      >
+    <div
+      className="sp-root sp-list"
+      style={{ left: x, top: y, width: w, height: h, zIndex: z }}
+      role="dialog"
+      aria-label="Sticky-pedia"
+      onPointerDownCapture={onFront}
+      onPointerDown={onRootDown}
+      onPointerMove={onRootMove}
+      onPointerUp={onRootUp}
+      onPointerCancel={onRootUp}
+    >
+      <div className="sp-list-head" onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={finish} onPointerCancel={finish} title="Drag to move">
         <img className="sp-list-ico" src={notesIcon} alt="" draggable={false} />
         <span className="sp-list-title">Sticky-pedia</span>
         <span className="sp-list-btns" onPointerDown={(e) => e.stopPropagation()}>
@@ -448,6 +529,9 @@ export function NotesListModal({ notes, z, onFront, onNew, onOpen, onColor, onAs
           </ul>
         )}
       </div>
+      {Object.keys(HANDLES).map((dir) => (
+        <i key={dir} className={`sp-h ${dir}`} onPointerDown={startResize(dir)} onPointerMove={moveResize} onPointerUp={finish} onPointerCancel={finish} />
+      ))}
     </div>
   );
 }
@@ -458,6 +542,15 @@ export default function Stickypedia({ notes: rawNotes, setNotes, listOpen, setLi
   const [order, setOrder] = useState([]);
   const [confirmId, setConfirmId] = useState(null);
   const [focusId, setFocusId] = useState(null);
+  // the list window's position/size is saved on this device only (screens differ between devices)
+  const [listGeo, setListGeo] = useState(() => {
+    try { const g = JSON.parse(localStorage.getItem('kutitap_notes_list_geo')); if (g && g.w && g.h) return g; } catch (e) { /* fall through */ }
+    return defaultListGeo();
+  });
+  const saveListGeo = (g) => {
+    setListGeo(g);
+    try { localStorage.setItem('kutitap_notes_list_geo', JSON.stringify(g)); } catch (e) { /* storage full or blocked */ }
+  };
   const front = useCallback((id) => setOrder((o) => (o[o.length - 1] === id ? o : [...o.filter((k) => k !== id), id])), []);
   const zOf = (id) => 9960 + Math.max(0, order.indexOf(id));
 
@@ -484,6 +577,8 @@ export default function Stickypedia({ notes: rawNotes, setNotes, listOpen, setLi
       {listOpen && (
         <NotesListModal
           notes={notes}
+          geo={listGeo}
+          onGeo={saveListGeo}
           z={zOf('list')}
           onFront={() => front('list')}
           onNew={create}

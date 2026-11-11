@@ -14,7 +14,7 @@
 export const MAX_NOTES = 5;
 export const MAX_CHARS = 159;
 
-// Notes list window = the Claw Machine window (420 x ~829 px); a note starts at 50% of it.
+// Notes list window starts at the Claw Machine window size (420 x ~829 px) and can be resized; a note starts at 50% of that start size.
 export const LIST_W = 420;
 export const LIST_H = 829;
 export const NOTE_W = Math.round(LIST_W * 0.5);
