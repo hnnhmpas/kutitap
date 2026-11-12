@@ -8,6 +8,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import './Stickypedia.css';
 import notesIcon from './assets/ui/notes-icon.png';
+import confirmFace from './assets/ui/kutitap-confirm.png';
 import {
   MAX_NOTES, MAX_CHARS, LIST_W, LIST_H, NOTE_W, NOTE_H, NOTE_MIN, NOTE_MAX, COLORS, colorOf, clamp, stamp,
   cleanRich, editorHtml, snippet, cleanNotes, newNote,
@@ -48,7 +49,7 @@ export function NoteColorPicker({ value, onPick }) {
 }
 
 // ---------------------------------------------------------------- DeleteConfirmModal
-export function DeleteConfirmModal({ onYes, onNo }) {
+export function DeleteConfirmModal({ message = 'Delete this note permanently?', onYes, onNo }) {
   const no = useRef(null);
   useEffect(() => {
     if (no.current) no.current.focus();
@@ -58,12 +59,12 @@ export function DeleteConfirmModal({ onYes, onNo }) {
   }, [onNo]);
   return (
     <div className="sp-root sp-modal-back" onClick={onNo}>
-      <div className="sp-modal" role="alertdialog" aria-modal="true" aria-label="Delete this note permanently?" onClick={(e) => e.stopPropagation()}>
-        <span className="sp-modal-bang" aria-hidden="true">!</span>
-        <p>Delete this note permanently?</p>
+      <div className="sp-modal" role="alertdialog" aria-modal="true" aria-label={message} onClick={(e) => e.stopPropagation()}>
+        <img className="sp-modal-teemo" src={confirmFace} alt="" aria-hidden="true" draggable="false" />
+        <p>{message}</p>
         <div className="sp-modal-btns">
-          <button type="button" className="sp-btn danger" onClick={onYes}>[ YES ]</button>
-          <button type="button" className="sp-btn" ref={no} onClick={onNo}>[ NO ]</button>
+          <button type="button" className="sp-btn danger" onClick={onYes}>Yes</button>
+          <button type="button" className="sp-btn" ref={no} onClick={onNo}>No</button>
         </div>
       </div>
     </div>

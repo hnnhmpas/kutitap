@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { buildInvoiceHtml } from './invoiceTemplate';
 import TabHeader, { TabTitle } from './TabHeader';
-import Stickypedia from './Stickypedia';
+import Stickypedia, { DeleteConfirmModal } from './Stickypedia';
+import KutitapChat from './KutitapChat';
+import { readChatOpen, saveChatOpen } from './chatSession';
 import notesIcon from './assets/ui/notes-icon.png';
 import {
   LayoutDashboard,
@@ -30,7 +32,8 @@ import {
 import './pixel-theme.css';
 
 // Firebase imports
-import { db } from './firebase';
+import { db, auth } from './firebase';
+import { signOut } from 'firebase/auth';
 import { doc, setDoc, onSnapshot } from 'firebase/firestore';
 
 // Pixel sprites (sliced from the badge sheet)
@@ -1248,8 +1251,9 @@ export default function App() {
     setIsAddColumnModalOpen(false);
   };
 
-  const handleDeleteColumn = (colName) => {
-    if (window.confirm(`Are you sure you want to delete column "${colName}"?`)) {
+  const handleDeleteColumn = (colName) => askDelete(`Delete column "${colName}"?`, () => doDeleteColumn(colName));
+  const doDeleteColumn = (colName) => {
+    {
       setLoanTableData(prev => {
         const catData = prev[activeLoanCategory] || initialLoanData[activeLoanCategory];
         const updatedColumns = catData.columns.filter(c => c !== colName);
@@ -1862,6 +1866,11 @@ export default function App() {
   // Sticky-pedia notes (saved in Firebase; the notes list window is just a toggle)
   const [stickyNotes, setStickyNotes] = useFirebaseSync('kutitap_notes', []);
   const [notesListOpen, setNotesListOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(readChatOpen); // Kutitap chat box: visible or minimized (kept for this browser tab only)
+  const [chatHas, setChatHas] = useState(false); // a conversation exists (shows a dot while minimized)
+  useEffect(() => { saveChatOpen(chatOpen); }, [chatOpen]);
+  const [confirmDel, setConfirmDel] = useState(null); // shared Yes/No delete box: { message, onYes }
+  const askDelete = (message, onYes) => setConfirmDel({ message, onYes });
   const [calcHistory, setCalcHistory] = useFirebaseSync('kutitap_calc_history', []);
   const kNow = useNow(60000);
   const kTod = todOf(kNow);
@@ -1869,6 +1878,13 @@ export default function App() {
   const kToday = localDay(kNow);
   const kDataReady = useDataReady(['kutitap_star', 'kutitap_utilities', 'kutitap_savings', 'kutitap_expenses', 'kutitap_loans']);
   const kRoundsLeft = roundsAvailable(kStar, kToday);
+  // read-only snapshot for the Kutitap chat (answers come from this; nothing is written back)
+  const getChatCtx = () => ({
+    now: new Date(), userName: 'Hannah Mae', incomes, utilityBills, monthlyExpenses, loanTableData, loanCategories, loanLabel, getRowAmounts,
+    savingsGoals, attendanceRecords, usdToPhpRate, historicalRates, dstOn,
+    data: { kutitap_incomes: incomes, kutitap_utilities: utilityBills, kutitap_expenses: monthlyExpenses, kutitap_loans: loanTableData, kutitap_savings: savingsGoals, kutitap_attendance: attendanceRecords, kutitap_attendance_dst: dstOn, kutitap_star: kStar }, // summarised before sending; notes/farm are never included
+    coins: kStar.coins || 0, rounds: { daily: dailyLeftOf(kStar, kToday), bonus: bonusTotalOf(kStar) },
+  });
   // the shop is a room under the top bar; leaving it when you switch tabs
   useEffect(() => { setIsShopOpen(false); }, [activeTab]);
 
@@ -1932,7 +1948,12 @@ export default function App() {
       <button type="button" style={{ '--i': 3 }} tabIndex={fabMenuOpen ? 0 : -1} className={`notes-fab fab-item${fabMenuOpen ? ' fab-open' : ''}${notesListOpen ? ' open' : ''}`} onClick={() => setNotesListOpen((v) => !v)} aria-label="Sticky-pedia notes" title="Sticky-pedia" aria-pressed={notesListOpen}>
         <img className="px-sprite" src={notesIcon} alt="" />
       </button>
+      <button type="button" className={`chat-fab${chatOpen ? ' open' : ''}${chatHas && !chatOpen ? ' has-chat' : ''}`} onClick={() => setChatOpen((v) => !v)} aria-label={chatOpen ? 'Minimize chat' : 'Chat with Kutitap'} aria-pressed={chatOpen} title={chatOpen ? 'Minimize chat' : chatHas ? 'Open your chat with Kutitap' : 'Chat with Kutitap'}>
+        <svg viewBox="0 0 12 11" aria-hidden="true"><path fill="#4a1d36" d="M1 0h10v1h1v7h-1v1H4v1H3v1H2V9H1V8H0V1h1z" /><path fill="#fffdf3" d="M1 1h10v7H1z" /><path fill="#4a1d36" d="M3 4h1v1H3zM5 4h1v1H5zM7 4h1v1H7z" /></svg>
+      </button>
+      <KutitapChat open={chatOpen} onMinimize={() => setChatOpen(false)} onEnd={() => setChatOpen(false)} onSessionChange={setChatHas} getCtx={getChatCtx} />
       <Catculator mode={calcMode} setMode={setCalcMode} history={calcHistory} setHistory={setCalcHistory} />
+      {confirmDel && <DeleteConfirmModal message={confirmDel.message} onYes={() => { const f = confirmDel.onYes; setConfirmDel(null); f(); }} onNo={() => setConfirmDel(null)} />}
       <Stickypedia notes={stickyNotes} setNotes={setStickyNotes} listOpen={notesListOpen} setListOpen={setNotesListOpen} />
       <div className="px-root" style={{
         position: 'fixed',
@@ -2046,7 +2067,7 @@ export default function App() {
             )}
 
             <button
-              onClick={() => alert("Sign In / Sign Out action triggered!")}
+              onClick={() => signOut(auth)}
               style={{
                 width: '100%',
                 padding: '12px',
@@ -2485,7 +2506,7 @@ export default function App() {
                                 {item.paid ? 'Paid' : 'Not Paid'}
                               </button>
                             ) : (<div />)}
-                            <button onClick={() => handleDeleteExpense(item.id)} title="Delete Expense" style={{ backgroundColor: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px', color: 'var(--px-accent)' }}>
+                            <button onClick={() => askDelete('Delete this expense?', () => handleDeleteExpense(item.id))} title="Delete Expense" style={{ backgroundColor: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px', color: 'var(--px-accent)' }}>
                               <Trash2 style={{ width: '14px', height: '14px' }} />
                             </button>
                           </div>
@@ -2690,7 +2711,7 @@ export default function App() {
                               <button onClick={() => handleOpenEditGoal(goal)} style={{ backgroundColor: 'var(--px-butter)', borderRadius: 0, '--px': 'pill', padding: '4px 10px', color: 'var(--px-accent)', fontWeight: 800, fontSize: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                 <Pencil style={{ width: '12px', height: '12px' }} /> Edit
                               </button>
-                              <button onClick={() => handleDeleteGoal(goal.id)} style={{ backgroundColor: 'var(--px-butter)', borderRadius: 0, '--px': 'pill', padding: '4px 10px', color: 'var(--px-accent)', fontWeight: 800, fontSize: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <button onClick={() => askDelete('Delete this savings goal and its farm plot?', () => handleDeleteGoal(goal.id))} style={{ backgroundColor: 'var(--px-butter)', borderRadius: 0, '--px': 'pill', padding: '4px 10px', color: 'var(--px-accent)', fontWeight: 800, fontSize: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                 <Trash2 style={{ width: '12px', height: '12px' }} /> Delete
                               </button>
                             </div>

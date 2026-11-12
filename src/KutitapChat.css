@@ -1,0 +1,63 @@
+/* KUTITAP CHAT: pixel support-style chat box. Font = the tracker's number font stack, regular weight, sentence case. */
+.kchat, .kchat * { box-sizing: border-box; font-family: 'DotGothic16', 'Pixelify Sans', ui-monospace, 'Courier New', monospace; font-weight: 400; -webkit-font-smoothing: none; }
+.kchat { position: fixed; right: 136px; bottom: 18px; z-index: 9975; width: min(340px, calc(100vw - 160px)); height: min(470px, calc(100vh - 44px)); min-height: 280px;
+  display: flex; flex-direction: column; color: var(--ink, #4a1d36); background: var(--px-card, #fff3d4);
+  box-shadow: -4px 0 0 0 var(--ink), 4px 0 0 0 var(--ink), 0 -4px 0 0 var(--ink), 0 4px 0 0 var(--ink), 0 10px 0 0 var(--px-shade, rgba(74, 29, 54, 0.3));
+  transform-origin: 100% 100%; opacity: 0; transform: translateX(20px) scale(0.85); pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.24s cubic-bezier(0.2, 0.85, 0.3, 1.12); }
+.kchat.kchat-in { opacity: 1; transform: none; pointer-events: auto; }
+.kchat button { border: 0; margin: 0; cursor: pointer; color: inherit; outline: none; }
+.kchat button:focus-visible, .kchat-input:focus-visible { outline: 3px dashed var(--px-accent, #c2306b); outline-offset: 2px; }
+
+/* header */
+.kchat-head { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: var(--px-accent, #c2306b); color: #fff; flex-shrink: 0; border-bottom: 4px solid var(--ink); }
+.kchat-title { display: flex; flex-direction: column; min-width: 0; flex: 1; line-height: 1.15; }
+.kchat-name { font-size: 20px; color: #fff; text-shadow: 2px 2px 0 var(--ink); }
+.kchat-sub { font-size: 12px; color: var(--px-butter, #ffe9a8); }
+.kchat-hbtn { width: 28px; height: 28px; display: grid; place-items: center; background: #fff; box-shadow: -2px 0 0 0 var(--ink), 2px 0 0 0 var(--ink), 0 -2px 0 0 var(--ink), 0 2px 0 0 var(--ink); flex-shrink: 0; margin: 2px; transition: transform 0.08s steps(2); }
+.kchat-hbtn:hover { transform: translateY(-2px); }
+.kchat-hbtn:active { transform: translateY(2px); }
+.kchat-hbtn i { display: block; width: 12px; height: 12px; }
+.kchat-x i { background: linear-gradient(45deg, transparent 42%, var(--ink) 42% 58%, transparent 58%), linear-gradient(-45deg, transparent 42%, var(--ink) 42% 58%, transparent 58%); }
+.kchat-min i { height: 4px; margin-top: 8px; background: var(--ink); }
+
+/* avatars (Kutitap's face, Bun Bun for the user) */
+.kchat-ava { width: 38px; height: 38px; flex-shrink: 0; display: grid; place-items: center; background: var(--px-paper, #fffdf3); box-shadow: -2px 0 0 0 var(--ink), 2px 0 0 0 var(--ink), 0 -2px 0 0 var(--ink), 0 2px 0 0 var(--ink); }
+.kchat-ava img { display: block; max-width: 30px; max-height: 30px; image-rendering: pixelated; }
+.kchat-ava.head { width: 52px; height: 52px; }
+.kchat-ava.head img { width: 42px; height: auto; max-width: none; max-height: none; }
+
+/* messages */
+.kchat-body { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 14px 12px 8px; display: flex; flex-direction: column; gap: 12px; background: var(--px-paper, #fffdf3); scrollbar-width: thin; scrollbar-color: var(--px-pink, #f0589a) var(--px-butter, #ffe9a8); }
+.kchat-body::-webkit-scrollbar { width: 12px; }
+.kchat-body::-webkit-scrollbar-track { background: var(--px-butter, #ffe9a8); }
+.kchat-body::-webkit-scrollbar-thumb { background: var(--px-pink, #f0589a); box-shadow: inset 0 0 0 2px var(--ink); }
+.kchat-row { display: flex; align-items: flex-end; gap: 8px; animation: kchat-pop 0.18s steps(3) both; }
+.kchat-row.me { flex-direction: row-reverse; }
+.kchat-bubble { max-width: calc(100% - 56px); padding: 8px 10px; font-size: 14px; line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; background: #fff;
+  box-shadow: -3px 0 0 0 var(--ink), 3px 0 0 0 var(--ink), 0 -3px 0 0 var(--ink), 0 3px 0 0 var(--ink); margin: 3px; }
+.kchat-row.me .kchat-bubble { background: var(--px-butter, #ffe9a8); }
+.kchat-bubble.dots { display: flex; gap: 5px; align-items: center; padding: 11px 12px; }
+.kchat-bubble.dots i { display: block; width: 6px; height: 6px; background: var(--ink); animation: kchat-dot 0.9s steps(2) infinite; }
+.kchat-bubble.dots i:nth-child(2) { animation-delay: 0.15s; }
+.kchat-bubble.dots i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes kchat-dot { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+@keyframes kchat-pop { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+.kchat-chips { display: flex; flex-wrap: wrap; gap: 8px; padding: 2px 0 2px 46px; }
+.kchat-chip { padding: 6px 9px; font-size: 13px; background: var(--px-sun, #ffe08a); box-shadow: -2px 0 0 0 var(--ink), 2px 0 0 0 var(--ink), 0 -2px 0 0 var(--ink), 0 2px 0 0 var(--ink); margin: 2px; transition: transform 0.08s steps(2); }
+.kchat-chip:hover { transform: translateY(-2px); filter: brightness(1.06); }
+.kchat-chip:active { transform: translateY(2px); }
+
+/* footer */
+.kchat-foot { display: flex; gap: 10px; padding: 10px 12px 12px; background: var(--px-card, #fff3d4); border-top: 4px solid var(--ink); flex-shrink: 0; }
+.kchat-input { flex: 1; min-width: 0; padding: 8px 10px; font-size: 14px; color: var(--ink); background: #fff; border: 0; margin: 3px; box-shadow: -3px 0 0 0 var(--ink), 3px 0 0 0 var(--ink), 0 -3px 0 0 var(--ink), 0 3px 0 0 var(--ink); }
+.kchat-input::placeholder { color: var(--px-muted, #8a5a74); }
+.kchat-send { padding: 8px 12px; font-size: 14px; background: var(--px-pink, #f0589a); color: #fff; margin: 3px; text-shadow: 1px 1px 0 var(--ink); box-shadow: -3px 0 0 0 var(--ink), 3px 0 0 0 var(--ink), 0 -3px 0 0 var(--ink), 0 3px 0 0 var(--ink); transition: transform 0.08s steps(2); }
+.kchat-send:hover:not(:disabled) { transform: translateY(-2px); }
+.kchat-send:active:not(:disabled) { transform: translateY(2px); }
+.kchat-send:disabled { background: #e8d9c0; color: #9a8070; text-shadow: none; cursor: not-allowed; }
+
+/* too narrow to sit beside the button: slide above it instead */
+@media (max-width: 560px) { .kchat { right: 12px; bottom: 76px; width: calc(100vw - 24px); height: min(470px, calc(100vh - 110px)); transform-origin: 100% 100%; } }
+@media (prefers-reduced-motion: reduce) { .kchat, .kchat-row, .kchat-bubble.dots i { transition: none; animation: none; } }
