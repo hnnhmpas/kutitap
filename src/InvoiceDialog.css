@@ -1,0 +1,8 @@
+.inv-modal, .inv-modal * { font-family: 'DotGothic16', 'Pixelify Sans', ui-monospace, 'Courier New', monospace; font-weight: 400; }
+.inv-form { width: 100%; display: flex; flex-direction: column; align-items: stretch; gap: 8px; text-align: left; }
+.inv-form > p { text-align: center; margin-bottom: 4px; }
+.inv-label { font-size: 14px; color: var(--ink, #4a1d36); }
+.inv-input { width: calc(100% - 6px); margin: 3px; padding: 8px 10px; font-size: 15px; color: var(--ink, #4a1d36); background: #fff; border: 0; box-shadow: -3px 0 0 0 var(--ink), 3px 0 0 0 var(--ink), 0 -3px 0 0 var(--ink), 0 3px 0 0 var(--ink); }
+.inv-input:focus-visible { outline: 3px dashed var(--px-accent, #c2306b); outline-offset: 3px; }
+.inv-error { font-size: 13px; color: var(--px-accent, #c2306b); text-align: center; }
+.inv-form .sp-modal-btns { justify-content: center; margin-top: 6px; }

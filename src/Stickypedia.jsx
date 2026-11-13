@@ -9,6 +9,8 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from
 import './Stickypedia.css';
 import notesIcon from './assets/ui/notes-icon.png';
 import confirmFace from './assets/ui/kutitap-confirm.png';
+import yesIcon from './assets/ui/icon-yes.png';
+import noIcon from './assets/ui/icon-no.png';
 import {
   MAX_NOTES, MAX_CHARS, LIST_W, LIST_H, NOTE_W, NOTE_H, NOTE_MIN, NOTE_MAX, COLORS, colorOf, clamp, stamp,
   cleanRich, editorHtml, snippet, cleanNotes, newNote,
@@ -63,8 +65,8 @@ export function DeleteConfirmModal({ message = 'Delete this note permanently?', 
         <img className="sp-modal-teemo" src={confirmFace} alt="" aria-hidden="true" draggable="false" />
         <p>{message}</p>
         <div className="sp-modal-btns">
-          <button type="button" className="sp-btn danger" onClick={onYes}>Yes</button>
-          <button type="button" className="sp-btn" ref={no} onClick={onNo}>No</button>
+          <button type="button" className="sp-btn ico" onClick={onYes} aria-label="Yes" title="Yes"><img src={yesIcon} alt="" draggable="false" /></button>
+          <button type="button" className="sp-btn ico" ref={no} onClick={onNo} aria-label="No" title="No"><img src={noIcon} alt="" draggable="false" /></button>
         </div>
       </div>
     </div>

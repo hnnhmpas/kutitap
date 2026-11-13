@@ -3,7 +3,10 @@
 // Coordinates are in points and were measured from the template's own PDF export.
 const ROBOTO_LINK = '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap">';
 
-export const buildInvoiceHtml = ({ monthName, year, weeks, totalHours, payText, fontCss = '', fontLink = ROBOTO_LINK }) => {
+const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+// otherReason / otherAmountText fill the "Reason for Other Amount" box and the OTHER AMOUNT line; totalText is TOTAL PAYMENT OWED.
+export const buildInvoiceHtml = ({ monthName, year, weeks, totalHours, payText, otherReason = '', otherAmountText = '$0.00', totalText = payText, fontCss = '', fontLink = ROBOTO_LINK }) => {
   const A = (cls, top, html, extra = '') => `<div class="a ${cls}" style="top:${top}pt;${extra}">${html}</div>`;
   const box = (top, h) => `<div class="a bx" style="top:${top}pt;height:${h}pt"></div>`;
   const labels = [
@@ -65,11 +68,12 @@ ${A('l', 526.5, 'Notes:', 'font-weight:400')}
 <div class="a bx bk" style="top:520.5pt;height:17.5pt"></div>
 ${A('l', 560.6, 'Reason for Other Amount:', 'font-weight:400')}
 <div class="a bx bk" style="top:554.5pt;height:17.5pt"></div>
+${otherReason ? A('v', 558.9, esc(otherReason), 'width:119pt;overflow:hidden;text-overflow:ellipsis') : ''}
 ${A('tt', 529.1, 'TOTAL HOURS')}${A('tt', 546.1, 'PAY FOR HOURS WORKED')}${A('tt', 563.1, 'OTHER AMOUNT')}
-${A('tv', 529.1, String(totalHours), 'color:#fdbe5a')}${A('tv', 546.1, payText)}${A('tv', 563.1, '$0.00')}
+${A('tv', 529.1, String(totalHours), 'color:#fdbe5a')}${A('tv', 546.1, payText)}${A('tv', 563.1, otherAmountText)}
 <div class="a" style="left:111pt;top:581.2pt;width:390pt;height:20pt;background:#2d3744;border:.5pt solid #999"></div>
 ${A('tt', 587.3, 'TOTAL PAYMENT OWED', 'color:#fff;font-size:8.62pt;line-height:10.3pt')}
-${A('tv', 587.3, payText, 'color:#fdbe5a;font-size:8.8pt;line-height:10.3pt')}
+${A('tv', 587.3, totalText, 'color:#fdbe5a;font-size:8.8pt;line-height:10.3pt')}
 ${A('', 609.9, '<b>Payment Schedule:</b><br>Your payment will be processed by the 5th business day of each month. It may take an additional few days to appear in<br>your account, depending on your bank.<br><br><b>Monthly Invoices:</b><br>Please submit a detailed invoice by 5pm MST on the first business day of the following month in order for payment to be<br>processed by the 5th business day.<br><br><b>Early Invoices:</b><br>Invoices submitted before the end of the month will not be accepted.', 'left:136.2pt')}
 ${A('', 696.8, 'Email your invoice (using your Boostability email address) to ap@boostability.com and<br>Cc the Team Lead you work with for their review', 'left:111pt;width:390pt;text-align:center;font-weight:700;color:#283592')}
 <div class="a" style="left:414.5pt;top:714.8pt;width:86.5pt;height:23.7pt;border:.5pt solid #ccc"></div>

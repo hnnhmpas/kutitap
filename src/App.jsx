@@ -4,6 +4,7 @@ import TabHeader, { TabTitle } from './TabHeader';
 import Stickypedia, { DeleteConfirmModal } from './Stickypedia';
 import KutitapChat from './KutitapChat';
 import { readChatOpen, saveChatOpen } from './chatSession';
+import InvoiceOtherAmountModal from './InvoiceDialog';
 import notesIcon from './assets/ui/notes-icon.png';
 import {
   LayoutDashboard,
@@ -1726,7 +1727,8 @@ export default function App() {
     });
   }, [estimatedSalaryPHP, attMonthIndex, attYear]);
 
-  const handleGenerateInvoicePDF = () => {
+  // other = { reason, amount } (USD) from the "add an other amount?" box, or null to generate as usual
+  const handleGenerateInvoicePDF = (other = null) => {
     const weeksMap = {};
     workingDays.forEach(d => {
       const firstDayOfMonth = new Date(attYear, attMonthIndex, 1).getDay();
@@ -1764,6 +1766,10 @@ export default function App() {
     const totalInvoiceHours = formattedWeeks.reduce((sum, w) => sum + w.hours, 0);
     const payForHoursWorked = totalInvoiceHours * 7.50;
     const formattedPay = `$${payForHoursWorked.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const fmtUsd = (n) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const otherNum = other && other.amount > 0 ? other.amount : 0;
+    const formattedOther = fmtUsd(otherNum);
+    const formattedTotal = fmtUsd(Math.round((payForHoursWorked + otherNum) * 100) / 100);
 
     const htmlContent = buildInvoiceHtml({
       monthName: attMonthName,
@@ -1771,6 +1777,9 @@ export default function App() {
       weeks: formattedWeeks,
       totalHours: totalInvoiceHours,
       payText: formattedPay,
+      otherReason: otherNum ? other.reason : '',
+      otherAmountText: formattedOther,
+      totalText: formattedTotal,
     });
 
     const printWindow = window.open('', '_blank');
@@ -1867,6 +1876,7 @@ export default function App() {
   const [stickyNotes, setStickyNotes] = useFirebaseSync('kutitap_notes', []);
   const [notesListOpen, setNotesListOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(readChatOpen); // Kutitap chat box: visible or minimized (kept for this browser tab only)
+  const [invoiceAsk, setInvoiceAsk] = useState(false); // "add an other amount?" box before the invoice opens
   const [chatHas, setChatHas] = useState(false); // a conversation exists (shows a dot while minimized)
   useEffect(() => { saveChatOpen(chatOpen); }, [chatOpen]);
   const [confirmDel, setConfirmDel] = useState(null); // shared Yes/No delete box: { message, onYes }
@@ -1953,6 +1963,7 @@ export default function App() {
       </button>
       <KutitapChat open={chatOpen} onMinimize={() => setChatOpen(false)} onEnd={() => setChatOpen(false)} onSessionChange={setChatHas} getCtx={getChatCtx} />
       <Catculator mode={calcMode} setMode={setCalcMode} history={calcHistory} setHistory={setCalcHistory} />
+      {invoiceAsk && <InvoiceOtherAmountModal onCancel={() => setInvoiceAsk(false)} onDone={(o) => { setInvoiceAsk(false); handleGenerateInvoicePDF(o); }} />}
       {confirmDel && <DeleteConfirmModal message={confirmDel.message} onYes={() => { const f = confirmDel.onYes; setConfirmDel(null); f(); }} onNo={() => setConfirmDel(null)} />}
       <Stickypedia notes={stickyNotes} setNotes={setStickyNotes} listOpen={notesListOpen} setListOpen={setNotesListOpen} />
       <div className="px-root" style={{
@@ -3069,7 +3080,7 @@ export default function App() {
                   </select>
                 </div>
                 <div style={{ display: 'flex', gap: '20px', fontSize: '14px', fontWeight: 800, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <button onClick={handleGenerateInvoicePDF} style={{ backgroundColor: 'var(--px-green-d)', color: '#FFFFFF', borderRadius: 0, '--px': 'pill', padding: '12px 20px', fontWeight: 800, fontSize: '14px', cursor: 'pointer', boxShadow: '0 4px 15px rgba(11,122,66,0.25)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <button onClick={() => setInvoiceAsk(true)} style={{ backgroundColor: 'var(--px-green-d)', color: '#FFFFFF', borderRadius: 0, '--px': 'pill', padding: '12px 20px', fontWeight: 800, fontSize: '14px', cursor: 'pointer', boxShadow: '0 4px 15px rgba(11,122,66,0.25)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <FileText style={{ width: '18px', height: '18px' }} /> Generate Invoice
                   </button>
                   <span style={{ color: 'var(--px-accent)', display: 'flex', alignItems: 'center', gap: '6px' }}>
