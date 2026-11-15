@@ -5,7 +5,7 @@ import Stickypedia, { DeleteConfirmModal } from './Stickypedia';
 import KutitapChat from './KutitapChat';
 import { readChatOpen, saveChatOpen } from './chatSession';
 import InvoiceOtherAmountModal from './InvoiceDialog';
-import LoanReminders from './LoanReminders';
+import LoanReminders, { reminderId } from './LoanReminders';
 import notesIcon from './assets/ui/notes-icon.png';
 import {
   LayoutDashboard,
@@ -1196,6 +1196,13 @@ export default function App() {
   // Paid / unpaid is now tracked per entry (cell): paidCells[rowKey][colName] = true
   const handleToggleCellPaid = (category, year, month, cutoff, colName) => {
     const rowKey = `${year}-${month}-${cutoff}`;
+    // Email Reminders: remember the day this entry was marked Paid (used for the on-time streak)
+    const rid = reminderId(category, rowKey, colName);
+    if (loanReminders?.items?.[rid] && (parseFloat(loanTableData[category]?.cells?.[rowKey]?.[colName]) || 0)) {
+      const wasPaid = !!loanTableData[category]?.paidCells?.[rowKey]?.[colName];
+      const n = new Date(); const today = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
+      setLoanReminders(prev => (prev?.items?.[rid] ? { ...prev, items: { ...prev.items, [rid]: { ...prev.items[rid], paidOn: wasPaid ? '' : today } } } : prev));
+    }
     setLoanTableData(prev => {
       const catData = prev[category] || initialLoanData[category] || { columns: [], cells: {}, paidStatus: {} };
       if (!(parseFloat(catData.cells[rowKey]?.[colName]) || 0)) return prev;

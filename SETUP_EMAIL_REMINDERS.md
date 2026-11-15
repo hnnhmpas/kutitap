@@ -34,15 +34,32 @@ It needs 3 things: an email sender (Resend), permission to read/write your track
    `git push origin main`
 4. On Vercel, wait until the newest deployment says **Ready**. (Variables only apply to deployments made after you saved them. If you saved them last, click the three dots on the newest deployment, then **Redeploy**.)
 
+## Part 4b: One new Firestore rule (needed for the Sent logs drawer)
+1. Firebase console, **Firestore Database**, **Rules** tab.
+2. Keep what is already there. Add this block right after your existing `match /financeTracker/user_data { ... }` block, using the SAME user id you already have in that block instead of `PASTE_OWNER_UID`:
+   ```
+   match /financeTracker/user_data/reminderLogs/{logId} {
+     allow read: if request.auth != null && request.auth.uid == 'PASTE_OWNER_UID';
+     allow write: if false;
+   }
+   ```
+3. Click **Publish**. (The ready-made file is `firestore.rules` in this folder. Do not paste its placeholder id.) No indexes are needed.
+
 ## Part 5: Test it
 1. In the app: Loans, **Email Reminders**. Tick a small loan and set its due date to 2 days from today. (Today's date as due date also works: that sends the "due today" email.)
 2. On Vercel: Project, **Settings**, **Cron Jobs**, find `/api/send-reminders`, click **Run**.
 3. Within a minute the email should arrive. Check Spam the first time and click **Not spam**.
 4. Tap **Paid** in the email, then tap the green confirm button on the page that opens. Back in the app, that loan turns green in its sub-tab.
 
+## Extra features
+- **On-time streak:** counts loans (with reminders on) marked Paid on or before their due date. Shows as a fire badge in the email footer at 2 or more. Resets to 0 when a due date passes unpaid or a loan is paid late.
+- **Boss defeated:** when every installment of a multi-part loan (a column with 2 or more entries) is Paid, one victory email is sent. Tapping Paid in an email sends it right away; paying in the app sends it on the next morning run.
+- **Red alert:** 1 day after the due date, if still unpaid, a red email with the Paid button goes out.
+- **Sent logs:** Loans, Email Reminders, **Sent logs**. Shows the latest 100 with type, time and status (Sent, Clicked Paid, Snoozed, Cancelled).
+
 ## How it behaves
 - The daily job runs once a day at about 8:00 AM Manila time (free Vercel plan: it can land anywhere within that hour).
-- 2 days before the due date: first email with **Paid** and **Remind me again**. On the due date: follow-up with **Paid**.
+- 2 days before the due date: first email with **Paid** and **Remind me again**. On the due date: follow-up with **Paid**. The day after: red alert with **Paid**.
 - A loan already marked Paid in the tracker (by you, or from an email) gets no more emails.
 - If you pick a due date less than 2 days away, the first email is skipped and only the due-date email is sent.
 - Changing a loan's due date restarts its schedule. Unticking or **Opt out** stops its emails at any time.

@@ -58,7 +58,36 @@ export const FOLLOW = [
   { s: 'Victory is one tap away: {name}', t: 'One tap to victory', b: 'You have come so far. Pay {amount} for {name} in {tab} today, tap Paid below, and the quest is yours.', x: 'Victory dance loading, Kutitap' },
 ];
 
-const fill = (s, v) => String(s).replace(/\{(name|amount|tab|due)\}/g, (_, k) => v[k]);
+
+// 1 day after the due date, still unpaid (red alert). Placeholders: {name} {amount} {tab} {due}
+export const OVERDUE = [
+  { s: 'Red alert: {name} is 1 day overdue', t: 'Red alert!', b: 'The quest bell rang yesterday and {name} in the {tab} guild is still waiting for {amount}. It was due {due}. One tap below and the alarm goes quiet.', x: 'Sirens off soon, Kutitap' },
+  { s: 'The drawbridge is stuck: {name} is overdue', t: 'Drawbridge alert', b: 'The bridge to the {tab} castle stayed up past {due}. Bring {amount} for {name} today and the gears will move again.', x: 'Pushing the lever with you, Kutitap' },
+  { s: 'A crimson scroll for {name}', t: 'The crimson scroll', b: 'Crimson wax means the matter cannot wait. {amount} for {name} ({tab}) was due {due} and is now one day late.', x: 'Sealed in red, Kutitap' },
+  { s: 'Quest overdue by one day: {name}', t: 'Quest overdue', b: 'Your quest slipped past its deadline of {due}. It is not a disaster yet. Settle {amount} for {name} in {tab} and the quest log turns green again.', x: 'Still on your team, Kutitap' },
+  { s: 'The guildmaster is knocking about {name}', t: 'Knock knock', b: 'The {tab} guildmaster stopped by because {name} was due {due}. They would like {amount} when you have a moment, which is now.', x: 'Holding the door, Kutitap' },
+  { s: 'Sound the horn: {name} missed yesterday\'s deadline', t: 'Sound the horn', b: 'Tooot! The watchtower noticed that {amount} for {name} ({tab}) is still outstanding after {due}. Fix it and the horn stops.', x: 'Ears ringing, Kutitap' },
+  { s: 'A dragon was spotted near {name}', t: 'Dragon sighting', b: 'The dragon of late fees is circling {name} in the {tab} guild. Pay {amount} now, since it was due {due}, and it flies away.', x: 'Sword ready, Kutitap' },
+  { s: 'Emergency courier: {name} is still unpaid', t: 'Emergency courier', b: 'This courier rode through the night. The message: {amount} for {name} ({tab}) is one day overdue since {due}.', x: 'Out of breath, Kutitap' },
+  { s: 'The lanterns turned red for {name}', t: 'Red lanterns', b: 'When the lanterns glow red, a deadline has passed. {name} in {tab} needed {amount} on {due}, so please take care of it today.', x: 'Carrying the lantern, Kutitap' },
+  { s: 'One more chance for {name}', t: 'The extra mile', b: 'The quest giver is still waiting at the door. Pay {amount} for {name} ({tab}), overdue since {due}, and the story continues.', x: 'Cheering you on, Kutitap' },
+];
+
+// final installment paid, loan cleared. Placeholders: {name} {tab} {total} {count}
+export const BOSS = [
+  { s: 'Boss defeated: {name} is cleared!', t: 'Boss defeated!', b: 'The last installment of {name} is paid. You beat all {count} parts in the {tab} guild and cleared {total}. Take a bow, hero.', x: 'Victory dance, Kutitap' },
+  { s: 'Victory scroll: {name} is finished', t: 'Victory scroll', b: 'The royal scribe wrote it down: {name} ({tab}) is completely paid. {count} installments, {total} cleared, zero left.', x: 'Confetti everywhere, Kutitap' },
+  { s: 'The dragon of {name} has fallen', t: 'The dragon has fallen', b: 'It took {count} brave payments to bring down {name} in the {tab} guild. Total treasure spent: {total}. The land is safe.', x: 'Roaring with joy, Kutitap' },
+  { s: 'Quest complete: {name}', t: 'Quest complete!', b: 'Final installment received. {name} in {tab} is officially done after {count} parts, with {total} cleared. Claim your reward.', x: 'Gold stars for you, Kutitap' },
+  { s: 'Level up! {name} is behind you', t: 'Level up!', b: 'You gained a level by finishing {name} ({tab}). {count} installments and {total} later, that quest is history.', x: 'Ding ding ding, Kutitap' },
+  { s: 'The final gate opens: {name} is paid off', t: 'The final gate opens', b: 'The last gate of {name} swung wide. Through {count} installments you cleared {total} in the {tab} guild. Walk through, champion.', x: 'Trumpets blaring, Kutitap' },
+  { s: 'Treasure unlocked: {name} is cleared', t: 'Treasure unlocked', b: 'The chest labelled {name} ({tab}) is finally open and empty of debt. {count} installments, {total} total. Well earned.', x: 'Sparkles for you, Kutitap' },
+  { s: 'Hero\'s feast for finishing {name}', t: 'Hero\'s feast', b: 'Set the table! {name} in the {tab} guild is paid in full across {count} installments, {total} cleared. Eat something nice.', x: 'Sharing my fish, Kutitap' },
+  { s: 'Banner raised: {name} is done', t: 'Banners up!', b: 'The guild raised a banner in your name. {name} ({tab}) was cleared in {count} steps for {total}, and not one is left.', x: 'Waving a tiny flag, Kutitap' },
+  { s: 'Boss down! Great job on {name}', t: 'Boss down!', b: 'Critical hit! The final installment of {name} landed and the boss is gone. {tab} guild, {count} parts, {total} cleared.', x: 'High paw, Kutitap' },
+];
+
+const fill = (s, v) => String(s).replace(/\{(name|amount|tab|due|total|count)\}/g, (_, k) => v[k]);
 export const render = (tpl, vars) => ({ subject: fill(tpl.s, vars), title: fill(tpl.t, vars), body: fill(tpl.b, vars), sign: fill(tpl.x, vars) });
 
 // rotation: pick a template that has not been used in the current cycle; when all 25 were used start a new cycle

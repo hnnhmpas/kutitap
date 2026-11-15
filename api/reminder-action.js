@@ -2,7 +2,7 @@
 // (so an email scanner opening the link can never mark a loan paid by itself).
 import { readServiceAccount, signingKey, mutate, seg } from './_lib/firestore.js';
 import { verifyToken } from './_lib/token.js';
-import { loanInfo } from './_lib/runner.js';
+import { loanInfo, maybeBoss, safeLog } from './_lib/runner.js';
 import { pageHtml } from './_lib/emailHtml.js';
 
 const send = (res, code, html) => { res.status(code).setHeader('Content-Type', 'text/html; charset=utf-8').setHeader('Cache-Control', 'no-store').send(html); };
@@ -28,6 +28,7 @@ export default async function handler(req, res) {
         return [{ path: 'kutitap_reminder_state', value: s }];
       });
     } catch { return send(res, 500, pageHtml({ title: 'Something went wrong', message: 'Please try the button again in a moment.', tone: 'warn' })); }
+    if (p.l) await safeLog(sa, process.env, p.l, { status: 'snoozed', updatedAt: stamp });
     return send(res, 200, pageHtml({ title: 'Quest accepted!', message: 'Kutitap will remind you again on the due date.' }));
   }
 
@@ -52,5 +53,8 @@ export default async function handler(req, res) {
     });
     if (missing) return send(res, 404, pageHtml({ title: 'Quest not found', message: 'That loan entry is no longer in the tracker.', tone: 'warn' }));
   } catch { return send(res, 500, pageHtml({ title: 'Something went wrong', message: 'Please try the button again in a moment.', tone: 'warn' })); }
-  return send(res, 200, pageHtml({ title: 'Quest complete!', message: 'Marked as Paid in your tracker. No more reminders for this loan.' }));
+  if (p.l) await safeLog(sa, process.env, p.l, { status: 'paid', updatedAt: stamp });
+  let boss = null;
+  try { boss = await maybeBoss({ sa, cat: p.c, col: p.o }); } catch (e) { console.error('boss email failed:', e.message); }
+  return send(res, 200, pageHtml({ title: boss ? 'Boss defeated!' : 'Quest complete!', message: boss ? 'Final installment paid. Marked as Paid in your tracker, and a victory email is on its way.' : 'Marked as Paid in your tracker. No more reminders for this loan.' }));
 }

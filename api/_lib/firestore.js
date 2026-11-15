@@ -116,3 +116,14 @@ export async function mutate(sa, compute, env = process.env, tries = 4) {
     catch (e) { if (!e.conflict || i === tries - 1) throw e; }
   }
 }
+
+// Reminder log documents: financeTracker/user_data/reminderLogs/<id>. Only the fields given are written (others kept).
+export async function writeLog(sa, id, fields, env = process.env) {
+  const t = await accessToken(sa);
+  const pid = env.FIREBASE_PROJECT_ID || sa.project_id;
+  const url = `https://firestore.googleapis.com/v1/projects/${pid}/databases/(default)/documents/financeTracker/user_data/reminderLogs/${encodeURIComponent(id)}`;
+  const mask = Object.keys(fields).map((k) => 'updateMask.fieldPaths=' + encodeURIComponent(k)).join('&');
+  const body = { fields: Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, toFs(v)])) };
+  const r = await fetch(`${url}?${mask}`, { method: 'PATCH', headers: { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!r.ok) throw new Error('log write failed ' + r.status);
+}

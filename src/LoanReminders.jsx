@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
-import { Mail, ChevronLeft, Sparkles } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Mail, ChevronLeft, ChevronDown, Sparkles } from 'lucide-react';
+import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
+import { db } from './firebase';
 import './LoanReminders.css';
 
 // Email Reminders view (Loans tab). Config lives in `kutitap_loan_reminders` (written here, never deleted: opting out sets enabled:false).
@@ -10,6 +12,9 @@ const addDays = (ymd, n) => { const [y, m, d] = ymd.split('-').map(Number); cons
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const short = (ymd) => { const [, m, d] = ymd.split('-').map(Number); return `${MON[m - 1]} ${d}`; };
 const isYmd = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''));
+const KIND = { first: '2-Day Advance', follow: 'Due Date', overdue: 'Overdue', boss: 'Boss Defeated', digest: 'Cutoff Digest' };
+const STATUS = { sent: 'Sent', paid: 'Clicked Paid', snoozed: 'Snoozed', cancelled: 'Cancelled' };
+const fmtTs = (ts) => { const d = new Date(ts); return Number.isNaN(+d) ? '' : d.toLocaleString('en-PH', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }); };
 export const reminderId = (cat, rowKey, col) => [cat, rowKey, col].join('~').replace(/[^\w ~-]/g, '_');
 
 export default function LoanReminders({ loanTableData, loanCategories, loanLabel, months, getCutoff30Label, availableYears, year: startYear, reminders, setReminders, reminderState, onBack }) {
@@ -17,6 +22,17 @@ export default function LoanReminders({ loanTableData, loanCategories, loanLabel
   const [tab, setTab] = useState('all');
   const [hidePaid, setHidePaid] = useState(false);
   const [bulkDue, setBulkDue] = useState('');
+  const [logsOpen, setLogsOpen] = useState(false);
+  const [logs, setLogs] = useState(null);
+  const [logsErr, setLogsErr] = useState(false);
+  // Sent logs: written only by the server job; read here (latest 100) while the drawer is open
+  useEffect(() => {
+    if (!logsOpen) return undefined;
+    setLogsErr(false);
+    const q = query(collection(db, 'financeTracker', 'user_data', 'reminderLogs'), orderBy('ts', 'desc'), limit(100));
+    return onSnapshot(q, (snap) => setLogs(snap.docs.map((d) => ({ id: d.id, ...d.data() }))), () => setLogsErr(true));
+  }, [logsOpen]);
+  const streak = (reminderState && reminderState.streak && reminderState.streak.count) || 0;
   const today = localToday();
   const items = (reminders && reminders.items) || {};
   const states = (reminderState && reminderState.items) || {};
@@ -76,8 +92,36 @@ export default function LoanReminders({ loanTableData, loanCategories, loanLabel
         <button type="button" className="lr-back" onClick={onBack} style={{ '--px': 'pill' }}><ChevronLeft style={{ width: 16, height: 16 }} /> Back to loans</button>
         <div className="lr-title"><Mail style={{ width: 22, height: 22 }} /> Email Reminders</div>
         <div className="lr-desc">Tick the loans you want to be reminded about and set a due date for each. You get an email 2 days before and another on the due date. Nothing is sent once a loan is marked Paid. The due date here is only for the emails; your 15th and 30th rows stay as they are.</div>
-        <div className="lr-count">{onCount} {onCount === 1 ? 'loan' : 'loans'} with reminders on</div>
+        <div className="lr-meta">
+          <div className="lr-count">{onCount} {onCount === 1 ? 'loan' : 'loans'} with reminders on</div>
+          <div className="lr-count">On-time streak: {streak}{streak >= 2 ? ' quests' : streak === 1 ? ' quest' : ''}</div>
+          <button type="button" className="lr-btn alt" style={{ '--px': 'pill' }} aria-expanded={logsOpen} onClick={() => setLogsOpen((o) => !o)}>
+            Sent logs <ChevronDown style={{ width: 14, height: 14, verticalAlign: 'middle', transform: logsOpen ? 'rotate(180deg)' : 'none' }} />
+          </button>
+        </div>
       </div>
+
+      {logsOpen && (
+        <div className="lr-logs" style={{ '--px': 'panel' }}>
+          <div className="lr-logs-h">Sent logs <span>latest 100</span></div>
+          {logsErr && <div className="lr-empty">Could not load the logs. Check that the reminderLogs rule was added in Firestore.</div>}
+          {!logsErr && logs === null && <div className="lr-empty">Loading...</div>}
+          {!logsErr && logs && logs.length === 0 && <div className="lr-empty"><Sparkles style={{ width: 16, height: 16 }} /> No reminders yet. They show up here after the daily job runs.</div>}
+          {!logsErr && logs && logs.length > 0 && (
+            <div className="lr-log-table" role="table">
+              <div className="lr-log-row head" role="row"><span>Quest</span><span>Type</span><span>Date and time</span><span>Status</span></div>
+              {logs.map((l) => (
+                <div key={l.id} className="lr-log-row" role="row">
+                  <span className="lr-log-q"><span>{l.name}</span><small>{l.tab}{l.due ? ` · due ${short(l.due)}` : ''}</small></span>
+                  <span>{KIND[l.kind] || l.kind}</span>
+                  <span>{fmtTs(l.ts)}</span>
+                  <span><b className={`lr-pill ${l.status}`}>{STATUS[l.status] || l.status}</b>{l.status === 'cancelled' && l.reason === 'paid' ? <small className="lr-why">already Paid</small> : null}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="lr-bar" style={{ '--px': 'panel' }}>
         <div className="lr-chips">{chip('all', 'All loans')}{loanCategories.map((c) => chip(c, loanLabel(c)))}</div>
