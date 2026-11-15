@@ -5,6 +5,7 @@ import Stickypedia, { DeleteConfirmModal } from './Stickypedia';
 import KutitapChat from './KutitapChat';
 import { readChatOpen, saveChatOpen } from './chatSession';
 import InvoiceOtherAmountModal from './InvoiceDialog';
+import LoanReminders from './LoanReminders';
 import notesIcon from './assets/ui/notes-icon.png';
 import {
   LayoutDashboard,
@@ -28,7 +29,8 @@ import {
   FileText,
   Pencil,
   Volume2,
-  VolumeX
+  VolumeX,
+  Mail
 } from 'lucide-react';
 import './pixel-theme.css';
 
@@ -1158,6 +1160,10 @@ export default function App() {
     'TikTokPayLater': { columns: ['Orders'], cells: {}, paidStatus: {} }
   };
   const [loanTableData, setLoanTableData] = useFirebaseSync('kutitap_loans', initialLoanData);
+  // Email Reminders: what the user picked (written here) and what the daily email job did (written only by the server)
+  const [loanReminders, setLoanReminders] = useFirebaseSync('kutitap_loan_reminders', { v: 1, items: {} });
+  const [reminderState] = useFirebaseSync('kutitap_reminder_state', {});
+  const [remindersOpen, setRemindersOpen] = useState(false);
   // a sub-tab that isn't in the saved data yet (e.g. the new Atome tab) starts from its defaults
   const getLoanCat = (cat) => loanTableData[cat] || initialLoanData[cat] || { columns: [], cells: {}, paidStatus: {} };
 
@@ -2844,6 +2850,9 @@ export default function App() {
                       )}
                     </div>
                   </div>
+                  <button onClick={() => setRemindersOpen(o => !o)} aria-pressed={remindersOpen} style={{ backgroundColor: remindersOpen ? 'var(--px-green-d)' : 'var(--px-pink)', color: '#FFFFFF', borderRadius: 0, '--px': 'pill', padding: '12px 20px', fontWeight: 400, fontSize: '14px', cursor: 'pointer', boxShadow: '0 4px 15px rgba(223,177,91,0.35)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Mail style={{ width: '18px', height: '18px' }} /> Email Reminders
+                  </button>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '12px' }}>
@@ -2880,6 +2889,14 @@ export default function App() {
                 </div>
               </div>
 
+              {remindersOpen ? (
+                <LoanReminders
+                  loanTableData={loanTableData} loanCategories={loanCategories} loanLabel={loanLabel}
+                  months={months} getCutoff30Label={getCutoff30Label} availableYears={availableYears} year={loanTableYear}
+                  reminders={loanReminders} setReminders={setLoanReminders} reminderState={reminderState}
+                  onBack={() => setRemindersOpen(false)}
+                />
+              ) : (<>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                   {loanCategories.map(cat => {
@@ -3012,6 +3029,7 @@ export default function App() {
                   </tfoot>
                 </table>
               </div>
+              </>)}
             </div>
           )}
 
