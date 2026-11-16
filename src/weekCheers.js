@@ -1,0 +1,61 @@
+// 50 cheerful messages for the weekly "week complete" toast. {each is different; the order below is the order they appear}
+export const CHEERS = [
+  "Another week in the books. You showed up, and that's the whole magic!",
+  "A whole week, one champion. Kutitap is clapping with both paws!",
+  "Week complete! Your future self just sent a thank-you note.",
+  "You did it again. Steady steps make the biggest adventures.",
+  "That's a wrap on the week. Go collect your well-earned rest!",
+  "Look at you, showing up all week. Kutitap is so proud!",
+  "Quest of the week: cleared! The loot is on its way.",
+  "Another week, another stack of star coins. Nicely done!",
+  "You kept your word to yourself this week. That's powerful.",
+  "Week finished! Stretch your paws and take a deep breath.",
+  "Small shifts, big results. This week belongs to you!",
+  "Kutitap is doing a tiny victory dance for your week.",
+  "You made it to the end of the week. Time to recharge!",
+  "Consistency looks good on you. Great week!",
+  "The week is done and you're still shining. Well played!",
+  "High paw for finishing another week, hero!",
+  "You turned a whole week of shifts into one big win. Congrats!",
+  "Rest up, ranger. You've earned every second of it.",
+  "Week cleared with style. The map just got a little shorter!",
+  "Every shift counted. Be proud of that.",
+  "Your streak of showing up is something special.",
+  "Pat on the back, treat on the table. That was a good week!",
+  "You carried this week like a pro. Enjoy the break!",
+  "Another chapter finished. The next one is going to be great.",
+  "Kutitap saved you a cozy spot for the weekend. Go relax!",
+  "You're building something lovely, one week at a time.",
+  "Week complete! Even the moon is cheering for you.",
+  "The quest board is clear and so is your week. Nice!",
+  "You deserve a big stretch, a snack, and a great sleep.",
+  "Look how far you've come! Another week down.",
+  "Kutitap's tail is swishing with joy. You nailed it!",
+  "That's how heroes do it: one shift after another!",
+  "Week done. Heart full, wallet happier.",
+  "You showed up, you finished, you shine. Bravo!",
+  "A tiny parade is marching in your honor. Great job this week!",
+  "Another week of effort turned into another week of progress.",
+  "Time to log off the week and log on to some fun!",
+  "Your hard work is adding up in the best way.",
+  "Weekend mode: unlocked. You earned the key!",
+  "Five out of five energy. Thank you for showing up for yourself!",
+  "Take a bow, adventurer. The week is yours!",
+  "Kutitap packed you a bag of good vibes for the weekend.",
+  "Not every hero wears a cape. Some just clock in. You're one of them!",
+  "Another week conquered. The view from the finish line is lovely.",
+  "You make it look easy. Rest well, you earned it!",
+  "Gold star for this week! Actually, a whole handful of them.",
+  "The week ended on a high note, and you wrote the music.",
+  "You kept going and it paid off. Cheers to you!",
+  "Time-in, time-out, time to celebrate. Great week!",
+  "Kutitap believes in you today, tomorrow, and all next week!",
+];
+
+// Same Friday always gives the same cheer, and 50 Fridays in a row give 50 different ones (no saved data needed).
+const FRIDAY_0 = Date.UTC(2020, 0, 3);
+export function pickWeekCheer(date) {
+  const weekNo = Math.floor((Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) - FRIDAY_0) / (7 * 86400000));
+  const i = ((weekNo * 7) % CHEERS.length + CHEERS.length) % CHEERS.length;
+  return CHEERS[i];
+}

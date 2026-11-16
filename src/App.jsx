@@ -6,6 +6,9 @@ import KutitapChat from './KutitapChat';
 import { readChatOpen, saveChatOpen } from './chatSession';
 import InvoiceOtherAmountModal from './InvoiceDialog';
 import LoanReminders, { reminderId } from './LoanReminders';
+import AttendanceProgressBar from './AttendanceProgressBar';
+import WeekCheerToast from './WeekCheerToast';
+import { pickWeekCheer } from './weekCheers';
 import notesIcon from './assets/ui/notes-icon.png';
 import {
   LayoutDashboard,
@@ -1611,6 +1614,7 @@ export default function App() {
   const [attMonthIndex, setAttMonthIndex] = useState(() => new Date().getMonth());
   const [attYear, setAttYear] = useState(() => new Date().getFullYear());
   const [attendanceRecords, setAttendanceRecords] = useFirebaseSync('kutitap_attendance', {});
+  const [weekCheer, setWeekCheer] = useState(null);
   const [isSwipingID, setIsSwipingID] = useState(false);
   // DST on: shift 10 PM - 7 AM. DST off: shift 11 PM - 8 AM (one hour later).
   const [dstOn, setDstOn] = useFirebaseSync('kutitap_attendance_dst', true);
@@ -1673,6 +1677,16 @@ export default function App() {
     else return 'Late';
   };
 
+  // a time-in on a Friday shift ends the work week: show a cheer (the month's last shift gets the victory screen instead)
+  const cheerIfWeekEnd = (dateKey) => {
+    const [y, m, d] = dateKey.split('-').map(Number);
+    const dt = new Date(y, m - 1, d);
+    if (dt.getDay() !== 5) return;
+    const wd = getWorkingDaysInMonth(m - 1, y);
+    if (d === wd[wd.length - 1]) return;
+    setWeekCheer({ id: Date.now(), text: pickWeekCheer(dt) });
+  };
+
   const handleTimeInToday = () => {
     const today = new Date();
     const currentHour = today.getHours();
@@ -1703,6 +1717,7 @@ export default function App() {
       ...prev,
       [dateKey]: { timedIn: true, time: timeString, status: evaluatedStatus, holidayOrLeave: '' }
     }));
+    cheerIfWeekEnd(dateKey);
   };
 
   const handleUpdateDayStatus = (dateKey, field, value) => {
@@ -3117,7 +3132,10 @@ export default function App() {
                 </div>
               </div>
 
-              <div style={{ backgroundColor: 'var(--px-sun)', borderRadius: 0, '--px': 'panel', overflowX: 'auto', boxShadow: '0 8px 25px rgba(223,177,91,0.2)', flex: 1 }}>
+              <WeekCheerToast cheer={weekCheer} onClose={() => setWeekCheer(null)} />
+              <AttendanceProgressBar year={attYear} monthIndex={attMonthIndex} monthName={attMonthName} records={attendanceRecords} workingDays={workingDays} estimatedSalaryPHP={estimatedSalaryPHP} />
+
+              <div style={{ backgroundColor: 'var(--px-sun)', borderRadius: 0, '--px': 'panel', overflowX: 'auto', boxShadow: '0 8px 25px rgba(223,177,91,0.2)', flex: 1, minHeight: '360px' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '700px' }}>
                   <thead>
                     <tr style={{ backgroundColor: 'var(--px-card)', borderBottom: '3px dashed var(--px-pink)' }}>
@@ -3163,6 +3181,7 @@ export default function App() {
                                   ...prev,
                                   [dateKey]: { ...record, timedIn: newTimedIn, time: timeString, status: evalStatus }
                                 }));
+                                if (newTimedIn) cheerIfWeekEnd(dateKey);
                               }}
                               style={{ borderRadius: 0, '--px': 'pill', padding: '8px 16px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '8px', fontWeight: 800, fontSize: '13px', backgroundColor: isTimedIn ? 'var(--px-card)' : 'rgba(255,255,255,0.8)', color: isTimedIn ? 'var(--px-green-d)' : 'var(--px-accent)', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}
                             >
