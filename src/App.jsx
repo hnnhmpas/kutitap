@@ -1623,6 +1623,8 @@ export default function App() {
   const shiftLabel = dstOn ? '10 PM – 7 AM' : '11 PM – 8 AM';
 
   const attMonthName = months[attMonthIndex];
+  // current shift date for the quest (night shift: up to the shift end hour it is still the previous day)
+  const questShiftDate = (() => { const t = new Date(); if (t.getHours() <= shiftEndHour) t.setDate(t.getDate() - 1); return { y: t.getFullYear(), m: t.getMonth(), d: t.getDate() }; })();
   const maxAttYears = Array.from({ length: 11 }, (_, i) => 2026 + i);
 
   const currentDate = new Date();
@@ -3133,7 +3135,7 @@ export default function App() {
               </div>
 
               <WeekCheerToast cheer={weekCheer} onClose={() => setWeekCheer(null)} />
-              <AttendanceProgressBar year={attYear} monthIndex={attMonthIndex} monthName={attMonthName} records={attendanceRecords} workingDays={workingDays} estimatedSalaryPHP={estimatedSalaryPHP} />
+              <AttendanceProgressBar shiftDate={questShiftDate} year={attYear} monthIndex={attMonthIndex} monthName={attMonthName} records={attendanceRecords} workingDays={workingDays} estimatedSalaryPHP={estimatedSalaryPHP} />
 
               <div style={{ backgroundColor: 'var(--px-sun)', borderRadius: 0, '--px': 'panel', overflowX: 'auto', boxShadow: '0 8px 25px rgba(223,177,91,0.2)', flex: 1, minHeight: '360px' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '700px' }}>

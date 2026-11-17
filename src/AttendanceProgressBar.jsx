@@ -68,8 +68,9 @@ function drawScene(back, front, imgs, Wd, S, avoidX) {
   put(f, 'mushR', away(at(0.74)), DECO_Y + 3);
 }
 
-export default function AttendanceProgressBar({ year, monthIndex, monthName, records, workingDays, estimatedSalaryPHP }) {
-  const quest = useMemo(() => computeQuest({ year, monthIndex, records, workingDays }), [year, monthIndex, records, workingDays]);
+export default function AttendanceProgressBar({ year, monthIndex, monthName, records, workingDays, estimatedSalaryPHP, shiftDate }) {
+  const sy = shiftDate && shiftDate.y, sm = shiftDate && shiftDate.m, sd = shiftDate && shiftDate.d;
+  const quest = useMemo(() => computeQuest({ year, monthIndex, records, workingDays, shiftDate: sy === undefined ? undefined : { y: sy, m: sm, d: sd } }), [year, monthIndex, records, workingDays, sy, sm, sd]);
   const [open, setOpen] = useState(false);
   const prev = useRef({ key: `${year}-${monthIndex}`, complete: quest.complete });
   // pop the victory screen only when the final shift gets filled while this month is on screen (never on load or month switch)
