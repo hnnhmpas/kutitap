@@ -1,0 +1,42 @@
+.lc-overlay { position: fixed; inset: 0; background: rgba(92,58,33,0.3); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 16px; }
+.lc-panel { background: var(--px-card); width: 100%; max-width: 560px; max-height: calc(100dvh - 32px); display: flex; flex-direction: column; padding: 20px 22px; gap: 12px; min-height: 0; }
+.lc-head { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px dashed var(--px-sun); padding-bottom: 10px; }
+.lc-title { display: flex; align-items: center; gap: 8px; font-size: 17px; color: var(--px-accent); }
+.lc-x { background: var(--px-butter); width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; color: var(--px-accent); }
+.lc-note { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--px-muted); }
+.lc-body { overflow-y: auto; min-height: 0; display: flex; flex-direction: column; gap: 14px; padding: 4px 6px 6px 2px; }
+.lc-form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.lc-f { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.lc-f > span { font-size: 12px; color: var(--ink); }
+.lc-wide { grid-column: 1 / -1; }
+.lc-f input, .lc-f select { width: 100%; background: #fff; color: var(--ink); padding: 11px 12px; font-size: 16px; min-width: 0; }
+.lc-pair { display: grid; grid-template-columns: 1.6fr 1fr; gap: 8px; }
+.lc-seg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.lc-seg button { background: #fff; color: var(--ink); padding: 10px; font-size: 14px; }
+.lc-seg button.on { background: var(--px-pink); color: #fff; text-shadow: 2px 2px 0 var(--ink); }
+.lc-empty { background: #fff; padding: 16px; font-size: 13px; line-height: 1.5; color: var(--px-muted); border: 2px dashed var(--px-sun); }
+.lc-results { display: flex; flex-direction: column; gap: 12px; }
+.lc-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.lc-tile { background: #fff; padding: 10px 8px; text-align: center; min-width: 0; }
+.lc-k { font-size: 10px; color: var(--px-accent); text-transform: uppercase; margin-bottom: 4px; }
+.lc-v { font-size: 17px; color: var(--ink); overflow-wrap: anywhere; }
+.lc-v.sm { font-size: 14px; }
+.lc-v.hot { color: var(--px-accent); }
+.lc-s { font-size: 10px; color: var(--px-muted); margin-top: 3px; }
+.lc-sub { font-size: 15px; color: var(--px-accent); }
+.lc-rows { display: flex; flex-direction: column; gap: 10px; }
+.lc-row { background: #fff; border: 3px solid var(--ink); }
+.lc-row-h { background: var(--px-pink); color: #fff; text-shadow: 2px 2px 0 var(--ink); padding: 7px 10px; font-size: 14px; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.lc-line { display: flex; justify-content: space-between; gap: 8px; padding: 8px 10px; font-size: 13px; border-top: 2px dashed var(--px-sun); flex-wrap: wrap; }
+.lc-line.add { background: var(--px-mint-lt); }
+.lc-cut { color: var(--px-muted); }
+.lc-eq b { font-weight: 400; color: var(--px-accent); }
+.lc-foot { font-size: 11px; color: var(--px-muted); }
+.lc-actions { display: flex; justify-content: flex-end; gap: 10px; padding-top: 4px; }
+.lc-btn { background: var(--px-pink); color: #fff; padding: 10px 20px; font-size: 14px; text-shadow: 2px 2px 0 var(--ink); }
+.lc-btn.alt { background: var(--px-butter); color: var(--ink); text-shadow: none; }
+@media (max-width: 480px) {
+  .lc-panel { padding: 16px; }
+  .lc-form { grid-template-columns: 1fr; }
+  .lc-tiles { grid-template-columns: 1fr; }
+}

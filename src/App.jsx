@@ -6,6 +6,7 @@ import KutitapChat from './KutitapChat';
 import { readChatOpen, saveChatOpen } from './chatSession';
 import InvoiceOtherAmountModal from './InvoiceDialog';
 import LoanReminders, { reminderId } from './LoanReminders';
+import LoanCalculator from './LoanCalculator';
 import AttendanceProgressBar from './AttendanceProgressBar';
 import WeekCheerToast from './WeekCheerToast';
 import { pickWeekCheer } from './weekCheers';
@@ -33,7 +34,8 @@ import {
   Pencil,
   Volume2,
   VolumeX,
-  Mail
+  Mail,
+  Calculator as CalculatorIcon
 } from 'lucide-react';
 import './pixel-theme.css';
 
@@ -1167,6 +1169,7 @@ export default function App() {
   const [loanReminders, setLoanReminders] = useFirebaseSync('kutitap_loan_reminders', { v: 1, items: {} });
   const [reminderState] = useFirebaseSync('kutitap_reminder_state', {});
   const [remindersOpen, setRemindersOpen] = useState(false);
+  const [loanCalcOpen, setLoanCalcOpen] = useState(false);
   // a sub-tab that isn't in the saved data yet (e.g. the new Atome tab) starts from its defaults
   const getLoanCat = (cat) => loanTableData[cat] || initialLoanData[cat] || { columns: [], cells: {}, paidStatus: {} };
 
@@ -2874,9 +2877,14 @@ export default function App() {
                       )}
                     </div>
                   </div>
-                  <button onClick={() => setRemindersOpen(o => !o)} aria-pressed={remindersOpen} style={{ backgroundColor: remindersOpen ? 'var(--px-green-d)' : 'var(--px-pink)', color: '#FFFFFF', borderRadius: 0, '--px': 'pill', padding: '12px 20px', fontWeight: 400, fontSize: '14px', cursor: 'pointer', boxShadow: '0 4px 15px rgba(223,177,91,0.35)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                                    <button onClick={() => setRemindersOpen(o => !o)} aria-pressed={remindersOpen} style={{ backgroundColor: remindersOpen ? 'var(--px-green-d)' : 'var(--px-pink)', color: '#FFFFFF', borderRadius: 0, '--px': 'pill', padding: '12px 20px', fontWeight: 400, fontSize: '14px', cursor: 'pointer', boxShadow: '0 4px 15px rgba(223,177,91,0.35)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Mail style={{ width: '18px', height: '18px' }} /> Email Reminders
                   </button>
+                  <button onClick={() => setLoanCalcOpen(true)} style={{ backgroundColor: 'var(--px-butter)', color: 'var(--ink)', borderRadius: 0, '--px': 'pill', padding: '12px 20px', fontWeight: 400, fontSize: '14px', cursor: 'pointer', boxShadow: '0 4px 15px rgba(223,177,91,0.35)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <CalculatorIcon style={{ width: '18px', height: '18px' }} /> Loan Calculator
+                  </button>
+                  </div>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '12px' }}>
@@ -2912,6 +2920,14 @@ export default function App() {
                   </div>
                 </div>
               </div>
+
+              {loanCalcOpen && (
+                <LoanCalculator
+                  loanTableData={loanTableData} loanCategories={loanCategories} loanLabel={loanLabel}
+                  months={months} getCutoff30Label={getCutoff30Label} getRowAmounts={getRowAmounts} availableYears={availableYears}
+                  defaultYear={loanTableYear} defaultMonthIndex={dashMonthIndex} onClose={() => setLoanCalcOpen(false)}
+                />
+              )}
 
               {remindersOpen ? (
                 <LoanReminders
