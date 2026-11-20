@@ -4,7 +4,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import './Catculator.css';
 import shell from './assets/ui/catculator.png';
-import { useCatculator, useCatTap, calcKeyHandler, fmt } from './useCatculator';
+import { useCatculator, useCatTap, calcKeyHandler, parseNumber, fmt } from './useCatculator';
 
 const WEEK = 7 * 24 * 60 * 60 * 1000;
 const when = (t) => new Date(t).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
@@ -79,7 +79,11 @@ export default function Catculator({ mode, setMode, history, setHistory }) {
     const now = Date.now();
     setHistory((h) => [{ id: `${now}-${Math.random().toString(36).slice(2, 6)}`, expr: e.expr, result: e.result, t: now }, ...(h || []).filter((x) => x.t >= now - WEEK)].slice(0, 300));
   }, [setHistory]);
-  const { press, reset, load, main, sub } = useCatculator({ onComplete });
+  const { press, reset, load, main, sub, copyValue, pasteNumber } = useCatculator({ onComplete });
+  const [note, setNote] = useState(''); // short message on the LCD: Copied / Pasted / problems
+  const noteTimer = useRef(null);
+  useEffect(() => () => clearTimeout(noteTimer.current), []);
+  const flash = useCallback((msg) => { setNote(msg); clearTimeout(noteTimer.current); noteTimer.current = setTimeout(() => setNote(''), 1700); }, []);
   const [scale, setScale] = useState(1);
   const [pos, setPos] = useState(null);
   const win = useRef(null);
@@ -111,6 +115,80 @@ export default function Catculator({ mode, setMode, history, setHistory }) {
     const cut = Date.now() - WEEK;
     if ((history || []).some((h) => h.t < cut)) setHistory((h) => (h || []).filter((e) => e.t >= cut));
   }, [mode, history, setHistory]);
+
+  // ---- copy / paste: the normal shortcuts (Ctrl/Cmd+C, Ctrl/Cmd+V), numbers only ----
+  // Copy puts the number on the screen on the clipboard, formatted like the screen (5,700). Paste takes the first number from the
+  // clipboard text and ignores commas, currency signs and any other words.
+  const onCopy = (e) => {
+    const c = copyValue();
+    if (!c) { flash('Nothing to copy'); return; }
+    e.clipboardData.setData('text/plain', c.shown);
+    e.preventDefault();
+    flash(`Copied ${c.shown}`);
+  };
+  const pasteText = (text) => {
+    const p = parseNumber(text);
+    if (!p) { flash('No number found'); return; }
+    if (p.error) { flash(p.error); return; }
+    const r = pasteNumber(p);
+    flash(r.ok ? `Pasted ${r.shown}` : r.msg);
+  };
+  const onPaste = (e) => { e.preventDefault(); pasteText(e.clipboardData ? e.clipboardData.getData('text') : ''); };
+
+  // ---- phones / tablets: press and hold the screen for a small Copy / Paste menu (right-click does the same with a mouse) ----
+  const [menu, setMenu] = useState(false);
+  const press_ = useRef(null);
+  const startHold = (e) => {
+    if (e.pointerType === 'mouse') return;
+    clearTimeout(press_.current && press_.current.t);
+    press_.current = { sx: e.clientX, sy: e.clientY, t: setTimeout(() => { press_.current = null; setMenu(true); }, 450) };
+  };
+  const moveHold = (e) => {
+    const h = press_.current;
+    if (h && Math.hypot(e.clientX - h.sx, e.clientY - h.sy) > 8) { clearTimeout(h.t); press_.current = null; }
+  };
+  const endHold = () => { if (press_.current) { clearTimeout(press_.current.t); press_.current = null; } };
+  useEffect(() => () => clearTimeout(press_.current && press_.current.t), []);
+  useEffect(() => {
+    if (!menu) return undefined;
+    const t = setTimeout(() => setMenu(false), 5000);
+    const away = (e) => { if (!(e.target.closest && e.target.closest('.cx-menu'))) setMenu(false); };
+    document.addEventListener('pointerdown', away, true);
+    return () => { clearTimeout(t); document.removeEventListener('pointerdown', away, true); };
+  }, [menu]);
+  const menuCopy = async () => {
+    setMenu(false);
+    const c = copyValue();
+    if (!c) { flash('Nothing to copy'); return; }
+    let ok = false;
+    try { await navigator.clipboard.writeText(c.shown); ok = true; } catch {
+      try { const ta = document.createElement('textarea'); ta.value = c.shown; ta.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(ta); ta.select(); ok = document.execCommand('copy'); document.body.removeChild(ta); } catch { ok = false; }
+    }
+    flash(ok ? `Copied ${c.shown}` : 'Copy not allowed');
+    if (win.current) win.current.focus();
+  };
+  const menuPaste = async () => {
+    setMenu(false);
+    try { pasteText(await navigator.clipboard.readText()); } catch { flash('Paste not allowed'); }
+    if (win.current) win.current.focus();
+  };
+  // while the Catculator is open the shortcuts also work when nothing else is focused (never inside a text field, and never over text the user selected)
+  const handlers = useRef({});
+  handlers.current = { onCopy, onPaste };
+  useEffect(() => {
+    if (mode !== 'open') return undefined;
+    const outside = (e) => {
+      const t = e.target;
+      if (win.current && win.current.contains(t)) return false; // the calculator handles its own
+      if (t && t.closest && t.closest('input, textarea, select, [contenteditable]')) return false;
+      return true;
+    };
+    const dc = (e) => { if (outside(e) && !String(window.getSelection() || '')) handlers.current.onCopy(e); };
+    const dp = (e) => { if (outside(e)) handlers.current.onPaste(e); };
+    document.addEventListener('copy', dc);
+    document.addEventListener('paste', dp);
+    return () => { document.removeEventListener('copy', dc); document.removeEventListener('paste', dp); };
+  }, [mode]);
 
   const close = useCallback(() => setMode('closed'), [setMode]); // click on the cat
   const minimize = useCallback(() => setMode('min'), [setMode]); // double-click on the cat
@@ -195,7 +273,9 @@ export default function Catculator({ mode, setMode, history, setHistory }) {
       tabIndex={0}
       role="dialog"
       aria-label="Catculator"
-      onKeyDown={calcKeyHandler(press)}
+      onKeyDown={(e) => { if (e.ctrlKey || e.metaKey) return; calcKeyHandler(press)(e); }} // shortcuts like Ctrl+C / Ctrl+V are handled by the copy / paste events
+      onCopy={onCopy}
+      onPaste={onPaste}
       onPointerDown={onRootDown}
       onPointerMove={onRootMove}
       onPointerUp={onRootUp}
@@ -212,8 +292,10 @@ export default function Catculator({ mode, setMode, history, setHistory }) {
               <button type="button" key={h.id} className="cx-hist-item" onClick={() => load(h.result)} title={when(h.t)}>{`${h.expr}=${fmt(h.result)}`}</button>
             ))}
           </div>
-          <div className="cx-expr">{sub || '\u00a0'}</div>
-          <div className="cx-main" style={{ fontSize: `${mainSize}cqi` }}>{main}</div>
+          <div className="cx-readout" onPointerDown={startHold} onPointerMove={moveHold} onPointerUp={endHold} onPointerCancel={endHold} onContextMenu={(e) => { e.preventDefault(); setMenu(true); }}>
+            <div className={`cx-expr${note ? ' note' : ''}`}>{note || sub || '\u00a0'}</div>
+            <div className="cx-main" style={{ fontSize: `${mainSize}cqi` }}>{main}</div>
+          </div>
         </div>
 
         {/* LAYER 3: hit boxes over the keys */}
@@ -230,6 +312,13 @@ export default function Catculator({ mode, setMode, history, setHistory }) {
 
         <div className="cx-drag" style={box(DRAG_STRIP)} onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag} title="Drag to move" />
       </div>
+
+      {menu && (
+        <div className="cx-menu" role="menu" onPointerDown={(e) => e.stopPropagation()}>
+          <button type="button" role="menuitem" onClick={menuCopy}>Copy</button>
+          <button type="button" role="menuitem" onClick={menuPaste}>Paste</button>
+        </div>
+      )}
 
       {/* resize handles: 4 corners + 4 edges */}
       {Object.keys(HANDLES).map((dir) => (

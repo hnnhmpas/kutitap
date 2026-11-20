@@ -24,8 +24,21 @@ export function evaluate(expr) {
 export const fmt = (v) => (Number.isNaN(v) ? 'Error' : v.toLocaleString('en-US', { maximumFractionDigits: 10 }));
 const spaced = (e) => e.replace(/([+\u2212\u00d7\u00f7])/g, '$1');
 
+// Paste helper: finds the first plain number in any text ("₱1,234.50", "Total: 300", "-45") and ignores everything else.
+export function parseNumber(text) {
+  const cleaned = String(text || '').replace(/[\u2212\u2013]/g, '-').replace(/,/g, '');
+  const m = cleaned.match(/(-?)\s*(\d+\.?\d*|\.\d+)/);
+  if (!m) return null;
+  const [ip, dp] = m[2].split('.');
+  const int = (ip || '0').replace(/^0+(?=\d)/, '');
+  if (int.length + (dp || '').length > 15) return { error: 'Number too long' };
+  return { neg: m[1] === '-', str: dp ? `${int}.${dp}` : int };
+}
+
 export function useCatculator({ onComplete } = {}) {
   const [st, setSt] = useState(INIT);
+  const stRef = useRef(INIT);
+  stRef.current = st;
   const done = useRef(onComplete);
   done.current = onComplete;
 
@@ -72,10 +85,39 @@ export function useCatculator({ onComplete } = {}) {
   const reset = useCallback(() => setSt(INIT), []);
   const load = useCallback((result) => setSt({ expr: String(result), result, done: true, silent: true }), []);
 
+  // the number on the screen, as plain text (no thousands commas) so it pastes cleanly anywhere
+  const copyValue = useCallback(() => {
+    const s = stRef.current;
+    if (s.done) return Number.isNaN(s.result) ? null : { text: s.result.toLocaleString('en-US', { useGrouping: false, maximumFractionDigits: 10 }), shown: fmt(s.result) };
+    const t = curNum(s.expr) || (s.expr.match(/[\d.]+(?=[+\u2212\u00d7\u00f7]$)/) || [''])[0] || '0';
+    return { text: t, shown: t };
+  }, []);
+
+  // Put a pasted number into the calculator: it replaces the number being typed, or goes after an operator, or starts fresh after =
+  const pasteNumber = useCallback(({ neg, str }) => {
+    const s = stRef.current;
+    let expr;
+    if (s.done) expr = (neg ? '\u2212' : '') + str;
+    else {
+      const seg = curNum(s.expr);
+      const head = s.expr.slice(0, s.expr.length - seg.length);
+      const last = head.slice(-1);
+      if (head === '') expr = (neg ? '\u2212' : '') + str;
+      else if (!neg) expr = head + str;
+      else if (head === '\u2212') expr = str; // minus minus = plus
+      else if (last === '+') expr = `${head.slice(0, -1)}\u2212${str}`;
+      else if (last === '\u2212') expr = `${head.slice(0, -1)}+${str}`;
+      else return { ok: false, msg: 'No negative after x or /' };
+    }
+    if (expr.length > 41) return { ok: false, msg: 'Too long' };
+    setSt({ expr, result: null, done: false });
+    return { ok: true, shown: (neg ? '-' : '') + fmt(Number(str)) };
+  }, []);
+
   const prevNum = (st.expr.match(/[\d.]+(?=[+\u2212\u00d7\u00f7]$)/) || [''])[0];
   const main = st.done ? fmt(st.result) : (curNum(st.expr) || prevNum || '0');
   const sub = st.expr ? spaced(st.expr) : '';
-  return { press, reset, load, main, sub };
+  return { press, reset, load, main, sub, copyValue, pasteNumber };
 }
 
 // keyboard: digits, + - * / Enter = Backspace % . Delete

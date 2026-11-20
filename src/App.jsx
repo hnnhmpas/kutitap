@@ -1170,6 +1170,7 @@ export default function App() {
   const [reminderState] = useFirebaseSync('kutitap_reminder_state', {});
   const [remindersOpen, setRemindersOpen] = useState(false);
   const [loanCalcOpen, setLoanCalcOpen] = useState(false);
+  const [loanCalcDraft, setLoanCalcDraft] = useState(false); // calculator has numbers in it (kept in memory only, gone on refresh)
   // a sub-tab that isn't in the saved data yet (e.g. the new Atome tab) starts from its defaults
   const getLoanCat = (cat) => loanTableData[cat] || initialLoanData[cat] || { columns: [], cells: {}, paidStatus: {} };
 
@@ -1994,6 +1995,13 @@ export default function App() {
       <button type="button" className={`chat-fab${chatOpen ? ' open' : ''}${chatHas && !chatOpen ? ' has-chat' : ''}`} onClick={() => setChatOpen((v) => !v)} aria-label={chatOpen ? 'Minimize chat' : 'Chat with Kutitap'} aria-pressed={chatOpen} title={chatOpen ? 'Minimize chat' : chatHas ? 'Open your chat with Kutitap' : 'Chat with Kutitap'}>
         <svg viewBox="0 0 12 11" aria-hidden="true"><path fill="#4a1d36" d="M1 0h10v1h1v7h-1v1H4v1H3v1H2V9H1V8H0V1h1z" /><path fill="#fffdf3" d="M1 1h10v7H1z" /><path fill="#4a1d36" d="M3 4h1v1H3zM5 4h1v1H5zM7 4h1v1H7z" /></svg>
       </button>
+      <LoanCalculator
+        open={loanCalcOpen && activeTab === 'loans'}
+        loanTableData={loanTableData} loanCategories={loanCategories} loanLabel={loanLabel}
+        months={months} getCutoff30Label={getCutoff30Label} getRowAmounts={getRowAmounts} availableYears={availableYears}
+        defaultYear={loanTableYear} defaultMonthIndex={dashMonthIndex}
+        onMinimize={() => setLoanCalcOpen(false)} onClose={() => setLoanCalcOpen(false)} onDraftChange={setLoanCalcDraft}
+      />
       <KutitapChat open={chatOpen} onMinimize={() => setChatOpen(false)} onEnd={() => setChatOpen(false)} onSessionChange={setChatHas} getCtx={getChatCtx} />
       <Catculator mode={calcMode} setMode={setCalcMode} history={calcHistory} setHistory={setCalcHistory} />
       {invoiceAsk && <InvoiceOtherAmountModal onCancel={() => setInvoiceAsk(false)} onDone={(o) => { setInvoiceAsk(false); handleGenerateInvoicePDF(o); }} />}
@@ -2882,7 +2890,7 @@ export default function App() {
                     <Mail style={{ width: '18px', height: '18px' }} /> Email Reminders
                   </button>
                   <button onClick={() => setLoanCalcOpen(true)} style={{ backgroundColor: 'var(--px-butter)', color: 'var(--ink)', borderRadius: 0, '--px': 'pill', padding: '12px 20px', fontWeight: 400, fontSize: '14px', cursor: 'pointer', boxShadow: '0 4px 15px rgba(223,177,91,0.35)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <CalculatorIcon style={{ width: '18px', height: '18px' }} /> Loan Calculator
+                    <CalculatorIcon style={{ width: '18px', height: '18px' }} /> Loan Calculator{loanCalcDraft && <span title="Calculation in progress" style={{ width: '8px', height: '8px', backgroundColor: 'var(--px-pink)', display: 'inline-block' }} />}
                   </button>
                   </div>
                 </div>
@@ -2920,14 +2928,6 @@ export default function App() {
                   </div>
                 </div>
               </div>
-
-              {loanCalcOpen && (
-                <LoanCalculator
-                  loanTableData={loanTableData} loanCategories={loanCategories} loanLabel={loanLabel}
-                  months={months} getCutoff30Label={getCutoff30Label} getRowAmounts={getRowAmounts} availableYears={availableYears}
-                  defaultYear={loanTableYear} defaultMonthIndex={dashMonthIndex} onClose={() => setLoanCalcOpen(false)}
-                />
-              )}
 
               {remindersOpen ? (
                 <LoanReminders

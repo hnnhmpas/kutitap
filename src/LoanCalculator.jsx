@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Calculator as CalculatorIcon, X, Info } from 'lucide-react';
+import { Calculator as CalculatorIcon, X, Minus, Info } from 'lucide-react';
 import './LoanCalculator.css';
 
 // Loan Calculator (Loans tab popup). Pure what-if maths: it only READS the existing loans and never writes anything to them.
@@ -10,7 +10,7 @@ const peso = (n) => {
 const num = (s) => { const n = parseFloat(String(s).replace(/,/g, '')); return Number.isFinite(n) ? n : 0; };
 const MAX_MONTHS = 60;
 
-export default function LoanCalculator({ loanTableData, loanCategories, loanLabel, months, getCutoff30Label, getRowAmounts, availableYears, defaultYear, defaultMonthIndex, onClose }) {
+export default function LoanCalculator({ loanTableData, loanCategories, loanLabel, months, getCutoff30Label, getRowAmounts, availableYears, defaultYear, defaultMonthIndex, open, onMinimize, onClose, onDraftChange }) {
   const [amount, setAmount] = useState('');
   const [repayment, setRepayment] = useState('');
   const [category, setCategory] = useState(loanCategories[0]);
@@ -19,11 +19,13 @@ export default function LoanCalculator({ loanTableData, loanCategories, loanLabe
   const [startYear, setStartYear] = useState(defaultYear);
   const [count, setCount] = useState('');
 
+  // Escape and tapping outside only minimize, so nothing typed is lost
   useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    if (!open) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') onMinimize(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [open, onMinimize]);
 
   const n = Math.floor(num(count));
   const startAbs = startYear * 12 + startMonth;
@@ -71,16 +73,25 @@ export default function LoanCalculator({ loanTableData, loanCategories, loanLabe
     return { total, interest, rate: amt > 0 ? (interest / amt) * 100 : 0, rows };
   }, [valid, amt, pay, n, startAbs, cutoffs, perMonth, loanTableData, loanCategories, months, getRowAmounts, getCutoff30Label]);
 
+  const hasDraft = !!(amount || repayment || count);
+  useEffect(() => { if (onDraftChange) onDraftChange(hasDraft); }, [hasDraft, onDraftChange]);
+
   const reset = () => { setAmount(''); setRepayment(''); setCount(''); setCutoffs(['15th']); setCategory(loanCategories[0]); setStartMonth(defaultMonthIndex); setStartYear(defaultYear); };
 
+  // Close = throw the calculation away; minimize = hide it but keep everything (state stays while the app is open)
+  const closeAndClear = () => { reset(); onClose(); };
+
   return (
-    <div className="lc-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    <div className="lc-overlay" style={{ display: open ? 'flex' : 'none' }} onMouseDown={(e) => { if (e.target === e.currentTarget) onMinimize(); }}>
       <div className="lc-panel" style={{ '--px': 'panel' }} role="dialog" aria-modal="true" aria-label="Loan Calculator">
         <div className="lc-head">
           <div className="lc-title kutitap-title"><CalculatorIcon style={{ width: 20, height: 20 }} /> Loan Calculator</div>
-          <button className="lc-x" onClick={onClose} aria-label="Close"><X style={{ width: 14, height: 14 }} /></button>
+          <div className="lc-xs">
+            <button className="lc-x" onClick={onMinimize} aria-label="Minimize" title="Minimize (keeps your numbers)"><Minus style={{ width: 14, height: 14 }} /></button>
+            <button className="lc-x" onClick={closeAndClear} aria-label="Close" title="Close (clears your numbers)"><X style={{ width: 14, height: 14 }} /></button>
+          </div>
         </div>
-        <div className="lc-note"><Info style={{ width: 14, height: 14, flexShrink: 0 }} /> Just a computation. Nothing here is added to your Loans tab.</div>
+        <div className="lc-note"><Info style={{ width: 14, height: 14, flexShrink: 0 }} /> Just a computation. Nothing here is added to your Loans tab. Minimize keeps your numbers until you refresh or close the app.</div>
 
         <div className="lc-body">
           <div className="lc-form">
@@ -158,7 +169,8 @@ export default function LoanCalculator({ loanTableData, loanCategories, loanLabe
 
         <div className="lc-actions">
           <button className="lc-btn alt" onClick={reset} style={{ '--px': 'pill' }}>Reset</button>
-          <button className="lc-btn" onClick={onClose} style={{ '--px': 'pill' }}>Close</button>
+          <button className="lc-btn alt" onClick={onMinimize} style={{ '--px': 'pill' }}>Minimize</button>
+          <button className="lc-btn" onClick={closeAndClear} style={{ '--px': 'pill' }}>Close</button>
         </div>
       </div>
     </div>

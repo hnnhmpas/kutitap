@@ -19,6 +19,13 @@
 .cx-key:hover { background: rgba(255, 255, 255, 0.14); }
 .cx-key:active { transform: translateY(1.5px); background: rgba(74, 29, 54, 0.16); }
 .cx-key:focus-visible { outline: 0.7cqi dashed #fff; outline-offset: -1cqi; }
+.cx-expr.note { opacity: 1; }
+.cx-readout { pointer-events: auto; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.cx-menu { position: absolute; left: 50%; top: 21%; transform: translateX(-50%); z-index: 6; display: flex; background: #fff3d4; border: 3px solid #4a1d36; box-shadow: 3px 4px 0 rgba(74, 29, 54, 0.35); touch-action: manipulation; animation: cx-pop 0.12s steps(3) both; }
+.cx-menu button { font: 11px 'Press Start 2P', monospace; color: #4a1d36; background: transparent; border: 0; padding: 12px 16px; min-height: 44px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.cx-menu button + button { border-left: 3px solid #4a1d36; }
+.cx-menu button:active { background: #ffe9a8; }
+@keyframes cx-pop { from { opacity: 0; transform: translateX(-50%) scale(0.8); } to { opacity: 1; transform: translateX(-50%) scale(1); } }
 .cx-drag { position: absolute; cursor: grab; touch-action: none; }
 .cx-drag:active { cursor: grabbing; }
 

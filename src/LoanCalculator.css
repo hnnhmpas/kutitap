@@ -2,6 +2,7 @@
 .lc-panel { background: var(--px-card); width: 100%; max-width: 560px; max-height: calc(100dvh - 32px); display: flex; flex-direction: column; padding: 20px 22px; gap: 12px; min-height: 0; }
 .lc-head { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px dashed var(--px-sun); padding-bottom: 10px; }
 .lc-title { display: flex; align-items: center; gap: 8px; font-size: 17px; color: var(--px-accent); }
+.lc-xs { display: flex; gap: 8px; }
 .lc-x { background: var(--px-butter); width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; color: var(--px-accent); }
 .lc-note { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--px-muted); }
 .lc-body { overflow-y: auto; min-height: 0; display: flex; flex-direction: column; gap: 14px; padding: 4px 6px 6px 2px; }
@@ -32,7 +33,7 @@
 .lc-cut { color: var(--px-muted); }
 .lc-eq b { font-weight: 400; color: var(--px-accent); }
 .lc-foot { font-size: 11px; color: var(--px-muted); }
-.lc-actions { display: flex; justify-content: flex-end; gap: 10px; padding-top: 4px; }
+.lc-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; padding-top: 4px; }
 .lc-btn { background: var(--px-pink); color: #fff; padding: 10px 20px; font-size: 14px; text-shadow: 2px 2px 0 var(--ink); }
 .lc-btn.alt { background: var(--px-butter); color: var(--ink); text-shadow: none; }
 @media (max-width: 480px) {
