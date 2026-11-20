@@ -1995,13 +1995,6 @@ export default function App() {
       <button type="button" className={`chat-fab${chatOpen ? ' open' : ''}${chatHas && !chatOpen ? ' has-chat' : ''}`} onClick={() => setChatOpen((v) => !v)} aria-label={chatOpen ? 'Minimize chat' : 'Chat with Kutitap'} aria-pressed={chatOpen} title={chatOpen ? 'Minimize chat' : chatHas ? 'Open your chat with Kutitap' : 'Chat with Kutitap'}>
         <svg viewBox="0 0 12 11" aria-hidden="true"><path fill="#4a1d36" d="M1 0h10v1h1v7h-1v1H4v1H3v1H2V9H1V8H0V1h1z" /><path fill="#fffdf3" d="M1 1h10v7H1z" /><path fill="#4a1d36" d="M3 4h1v1H3zM5 4h1v1H5zM7 4h1v1H7z" /></svg>
       </button>
-      <LoanCalculator
-        open={loanCalcOpen && activeTab === 'loans'}
-        loanTableData={loanTableData} loanCategories={loanCategories} loanLabel={loanLabel}
-        months={months} getCutoff30Label={getCutoff30Label} getRowAmounts={getRowAmounts} availableYears={availableYears}
-        defaultYear={loanTableYear} defaultMonthIndex={dashMonthIndex}
-        onMinimize={() => setLoanCalcOpen(false)} onClose={() => setLoanCalcOpen(false)} onDraftChange={setLoanCalcDraft}
-      />
       <KutitapChat open={chatOpen} onMinimize={() => setChatOpen(false)} onEnd={() => setChatOpen(false)} onSessionChange={setChatHas} getCtx={getChatCtx} />
       <Catculator mode={calcMode} setMode={setCalcMode} history={calcHistory} setHistory={setCalcHistory} />
       {invoiceAsk && <InvoiceOtherAmountModal onCancel={() => setInvoiceAsk(false)} onDone={(o) => { setInvoiceAsk(false); handleGenerateInvoicePDF(o); }} />}
@@ -2023,6 +2016,13 @@ export default function App() {
         backgroundImage: 'radial-gradient(var(--px-sun) 1.5px, transparent 1.5px)',
         backgroundSize: '24px 24px'
       }}>
+        <LoanCalculator
+          open={loanCalcOpen && activeTab === 'loans'}
+          loanTableData={loanTableData} loanCategories={loanCategories} loanLabel={loanLabel}
+          months={months} getCutoff30Label={getCutoff30Label} getRowAmounts={getRowAmounts} availableYears={availableYears}
+          defaultYear={loanTableYear} defaultMonthIndex={dashMonthIndex}
+          onMinimize={() => setLoanCalcOpen(false)} onClose={() => setLoanCalcOpen(false)} onDraftChange={setLoanCalcDraft}
+        />
         {/* SIDEBAR */}
         <div className="px-sidebar" style={{
           width: isSidebarOpen ? '260px' : '80px',
